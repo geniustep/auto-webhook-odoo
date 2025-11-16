@@ -1,86 +1,99 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <data noupdate="1">
+    <data noupdate="0">
 
-        <!-- Default Webhook Configurations for Critical Models -->
+        <!-- Default BridgeCore Subscriber - Enabled by default -->
+        <record id="webhook_subscriber_bridgecore" model="webhook.subscriber">
+            <field name="name">BridgeCore Default Endpoint</field>
+            <field name="endpoint_url">https://api.bridgecore.ma/webhook</field>
+            <field name="auth_type">bearer</field>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="timeout">30</field>
+            <field name="verify_ssl" eval="True"/>
+            <field name="retry_enabled" eval="True"/>
+            <field name="max_retries">5</field>
+            <field name="notes">Default BridgeCore webhook endpoint. Configure auth_token if needed.</field>
+        </record>
+
+        <!-- Default Webhook Configurations for Critical Models - All Enabled by Default -->
 
         <!-- Sale Orders -->
         <record id="webhook_config_sale_order" model="webhook.config">
             <field name="name">Sale Orders</field>
             <field name="model_id" ref="sale.model_sale_order"/>
-            <field name="enabled" eval="False"/>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
             <field name="priority">high</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
-            <field name="notes">High priority webhook for sales orders. Enable and configure subscribers to start tracking.</field>
+            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="notes">High priority webhook for sales orders. Automatically enabled and configured.</field>
         </record>
 
         <!-- Purchase Orders -->
         <record id="webhook_config_purchase_order" model="webhook.config">
             <field name="name">Purchase Orders</field>
             <field name="model_id" ref="purchase.model_purchase_order"/>
-            <field name="enabled" eval="False"/>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
             <field name="priority">high</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
-            <field name="notes">High priority webhook for purchase orders. Enable and configure subscribers to start tracking.</field>
+            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="notes">High priority webhook for purchase orders. Automatically enabled and configured.</field>
         </record>
 
         <!-- Invoices / Account Moves -->
         <record id="webhook_config_account_move" model="webhook.config">
             <field name="name">Invoices (Account Moves)</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="enabled" eval="False"/>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
             <field name="priority">high</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
-            <field name="notes">High priority webhook for invoices and account moves. Enable and configure subscribers to start tracking.</field>
+            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="notes">High priority webhook for invoices and account moves. Automatically enabled and configured.</field>
         </record>
 
         <!-- Stock Picking -->
         <record id="webhook_config_stock_picking" model="webhook.config">
             <field name="name">Stock Picking (Deliveries)</field>
             <field name="model_id" ref="stock.model_stock_picking"/>
-            <field name="enabled" eval="False"/>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
             <field name="priority">medium</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
-            <field name="notes">Medium priority webhook for stock movements. Enable and configure subscribers to start tracking.</field>
+            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="notes">Medium priority webhook for stock movements. Automatically enabled and configured.</field>
         </record>
 
         <!-- Customers / Partners -->
         <record id="webhook_config_res_partner" model="webhook.config">
             <field name="name">Customers &amp; Partners</field>
             <field name="model_id" ref="base.model_res_partner"/>
-            <field name="enabled" eval="False"/>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
             <field name="priority">medium</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
-            <field name="notes">Medium priority webhook for customers and partners. Enable and configure subscribers to start tracking.</field>
+            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="notes">Medium priority webhook for customers and partners. Automatically enabled and configured.</field>
         </record>
 
         <!-- Products -->
         <record id="webhook_config_product_template" model="webhook.config">
             <field name="name">Products (Templates)</field>
             <field name="model_id" ref="product.model_product_template"/>
-            <field name="enabled" eval="False"/>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
             <field name="priority">low</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
-            <field name="notes">Low priority webhook for product templates. Enable and configure subscribers to start tracking.</field>
-        </record>
-
-        <!-- Example Default Subscriber (disabled by default) -->
-        <record id="webhook_subscriber_bridgecore" model="webhook.subscriber">
-            <field name="name">BridgeCore Default Endpoint</field>
-            <field name="endpoint_url">https://bridgecore.geniura.com/api/v1/webhooks/receive</field>
-            <field name="auth_type">bearer</field>
-            <field name="enabled" eval="False"/>
-            <field name="timeout">30</field>
-            <field name="verify_ssl" eval="True"/>
-            <field name="retry_enabled" eval="True"/>
-            <field name="max_retries">5</field>
-            <field name="notes">Default BridgeCore webhook endpoint. Configure auth_token and enable to start using.</field>
+            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="notes">Low priority webhook for product templates. Automatically enabled and configured.</field>
         </record>
 
     </data>
