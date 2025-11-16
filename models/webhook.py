@@ -75,94 +75,18 @@ class WebhookMixin(models.AbstractModel):
 
     def write(self, vals):
         """Override write to track webhook events"""
-        # DO NOT read old values before write - this can cause transaction failures
-        # We'll track webhook events after write without old values if needed
+        # TEMPORARILY DISABLED: Webhook tracking in write() to prevent transaction failures
+        # The issue is that even with savepoints, webhook operations can cause transaction failures
+        # Webhook tracking should be done asynchronously or through a different mechanism
         # This ensures write() never fails due to webhook tracking
         
-        # Check if we should skip webhook tracking entirely
-        skip_webhook = self.env.context.get('skip_webhook', False)
-        
-        # Call super to perform write first - this is the critical operation
-        # We do this BEFORE any webhook operations to ensure it never fails
+        # Call super to perform write - this is the critical operation
+        # We do this WITHOUT any webhook operations to ensure it never fails
         result = super(WebhookMixin, self).write(vals)
-
-        # Track webhook events after successful write
-        # Skip if explicitly requested
-        if skip_webhook:
-            return result
         
-        # Check transaction state IMMEDIATELY after write - before any webhook operations
-        try:
-            self.env.cr.execute("SELECT 1")
-        except Exception:
-            # Transaction is in failed state, skip webhook tracking completely
-            _logger.warning(f"Transaction in failed state after write, skipping webhook tracking for {self._name}")
-            return result
+        # TODO: Re-enable webhook tracking using async mechanism or delayed processing
+        # For now, webhook tracking is disabled in write() to prevent transaction failures
         
-        # Use a savepoint to isolate webhook operations from main transaction
-        savepoint = None
-        try:
-            # Check if webhook.config model exists and is accessible
-            if 'webhook.config' not in self.env:
-                return result
-            
-            # Create savepoint to isolate webhook operations BEFORE any webhook calls
-            savepoint = self.env.cr.savepoint()
-                
-            # Get webhook configuration for this model
-            # This call is now inside savepoint, so any errors won't affect main transaction
-            config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
-
-            if config and config.enabled and 'write' in config.events:
-                changed_fields = set(vals.keys())
-
-                for record in self:
-                    try:
-                        # Check if should track this event
-                        if config.should_track_event(record, 'write', changed_fields):
-                            # Don't use old_data - we didn't read it to avoid transaction issues
-                            # The payload will only contain new values
-                            self._create_webhook_event(
-                                record,
-                                'write',
-                                config,
-                                vals=vals,
-                                old_data=None,  # No old data to avoid transaction issues
-                                changed_fields=list(changed_fields)
-                            )
-                    except Exception as e:
-                        # Log error for this specific record but continue
-                        _logger.error(f"Failed to create webhook event for {record._name}:{record.id}: {e}")
-                        # Rollback savepoint for this record
-                        if savepoint:
-                            try:
-                                self.env.cr.rollback(savepoint)
-                                savepoint = self.env.cr.savepoint()
-                            except Exception:
-                                # If savepoint rollback fails, skip remaining webhooks
-                                break
-            
-            # Release savepoint if all operations succeeded
-            # Note: In psycopg2, savepoints are automatically released on commit
-            # We don't need to explicitly release them
-            if savepoint:
-                try:
-                    # Savepoints are automatically released, no action needed
-                    pass
-                except Exception:
-                    # If anything fails, transaction might be in bad state, but we already did the write
-                    pass
-
-        except Exception as e:
-            # Rollback savepoint on any error
-            if savepoint:
-                try:
-                    self.env.cr.rollback(savepoint)
-                except Exception:
-                    pass
-            # Log error but don't block the operation
-            _logger.error(f"Failed to create webhook event for {self._name}: {e}", exc_info=True)
-
         return result
 
     def unlink(self):
