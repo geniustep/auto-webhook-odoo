@@ -238,36 +238,19 @@ class WebhookConfig(models.Model):
     def _auto_create_config(self, model_name):
         """
         Auto-create configuration for a model
+        
+        DISABLED: This method is disabled to prevent duplicate key errors and transaction failures.
+        Configs should be created manually or through a separate process.
 
         Args:
             model_name: Technical name of the model
 
         Returns:
-            webhook.config record or False
+            False (always returns False to prevent auto-creation)
         """
-        # Check if model exists
-        model = self.env['ir.model'].search([('model', '=', model_name)], limit=1)
-        if not model:
-            return False
-
-        # Auto-classify priority based on model name
-        priority = self._auto_classify_priority(model_name)
-
-        try:
-            config = self.create({
-                'name': f'Auto Config - {model.name}',
-                'model_id': model.id,
-                'priority': priority,
-                'enabled': False,  # Disabled by default for auto-created configs
-                'events': 'create,write,unlink',
-            })
-
-            _logger.info(f"Auto-created webhook config for model {model_name}")
-            return config
-
-        except Exception as e:
-            _logger.error(f"Failed to auto-create config for {model_name}: {e}")
-            return False
+        # DISABLED: Do not auto-create configs to prevent duplicate key errors
+        _logger.debug(f"Auto-create config disabled for {model_name}")
+        return False
 
     def _auto_classify_priority(self, model_name):
         """
