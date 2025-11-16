@@ -1,2 +1,13 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_update_webhook,access.update.webhook,model_update_webhook,base.group_user,1,0,0,1
+access_webhook_event_user,webhook.event.user,model_webhook_event,base.group_user,1,0,0,0
+access_webhook_event_manager,webhook.event.manager,model_webhook_event,base.group_system,1,1,1,1
+access_webhook_config_user,webhook.config.user,model_webhook_config,base.group_user,1,0,0,0
+access_webhook_config_manager,webhook.config.manager,model_webhook_config,base.group_system,1,1,1,1
+access_webhook_subscriber_user,webhook.subscriber.user,model_webhook_subscriber,base.group_user,1,0,0,0
+access_webhook_subscriber_manager,webhook.subscriber.manager,model_webhook_subscriber,base.group_system,1,1,1,1
+access_webhook_template_user,webhook.template.user,model_webhook_template,base.group_user,1,0,0,0
+access_webhook_template_manager,webhook.template.manager,model_webhook_template,base.group_system,1,1,1,1
+access_webhook_retry_user,webhook.retry.user,model_webhook_retry,base.group_user,1,0,0,0
+access_webhook_retry_manager,webhook.retry.manager,model_webhook_retry,base.group_system,1,1,1,1
+access_webhook_audit_user,webhook.audit.user,model_webhook_audit,base.group_user,1,0,0,0
+access_webhook_audit_manager,webhook.audit.manager,model_webhook_audit,base.group_system,1,1,1,1

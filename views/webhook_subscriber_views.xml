@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Webhook Subscriber Tree View -->
+    <record id="webhook_subscriber_view_tree" model="ir.ui.view">
+        <field name="name">webhook.subscriber.tree</field>
+        <field name="model">webhook.subscriber</field>
+        <field name="arch" type="xml">
+            <tree string="Webhook Subscribers" decoration-muted="not enabled or not active">
+                <field name="name"/>
+                <field name="endpoint_url"/>
+                <field name="auth_type"/>
+                <field name="enabled" widget="boolean_toggle"/>
+                <field name="active" invisible="1"/>
+                <field name="success_rate" widget="progressbar"/>
+                <field name="total_sent"/>
+                <field name="total_failed"/>
+                <field name="last_success_at"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Webhook Subscriber Form View -->
+    <record id="webhook_subscriber_view_form" model="ir.ui.view">
+        <field name="name">webhook.subscriber.form</field>
+        <field name="model">webhook.subscriber</field>
+        <field name="arch" type="xml">
+            <form string="Webhook Subscriber">
+                <header>
+                    <button name="action_test_connection" string="Test Connection" type="object" class="btn-primary"/>
+                    <button name="action_view_events" string="View Events" type="object" class="btn-secondary"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button class="oe_stat_button" type="object" name="action_view_events" icon="fa-check-circle" attrs="{'invisible': [('total_sent', '=', 0)]}">
+                            <field string="Sent" name="total_sent" widget="statinfo"/>
+                        </button>
+                        <button class="oe_stat_button" type="object" name="action_view_events" icon="fa-exclamation-circle" attrs="{'invisible': [('total_failed', '=', 0)]}">
+                            <field string="Failed" name="total_failed" widget="statinfo"/>
+                        </button>
+                        <button class="oe_stat_button" type="object" icon="fa-percent">
+                            <field string="Success Rate" name="success_rate" widget="statinfo"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Disabled" bg_color="bg-danger" attrs="{'invisible': [('enabled', '=', True)]}"/>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="endpoint_url" widget="url"/>
+                            <field name="enabled" widget="boolean_toggle"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                        <group>
+                            <field name="timeout"/>
+                            <field name="verify_ssl"/>
+                            <field name="last_success_at"/>
+                            <field name="last_failure_at"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Authentication">
+                            <group>
+                                <field name="auth_type" widget="radio"/>
+                                <field name="auth_token" password="True" attrs="{'invisible': [('auth_type', 'not in', ['bearer', 'basic'])]}"/>
+                                <field name="api_key" password="True" attrs="{'invisible': [('auth_type', '!=', 'api_key')]}"/>
+                                <field name="api_key_header" attrs="{'invisible': [('auth_type', '!=', 'api_key')]}"/>
+                            </group>
+                        </page>
+                        <page string="Rate Limiting">
+                            <group>
+                                <field name="rate_limit"/>
+                                <field name="rate_limit_window" attrs="{'invisible': [('rate_limit', '=', 0)]}"/>
+                            </group>
+                        </page>
+                        <page string="Retry Settings">
+                            <group>
+                                <field name="retry_enabled"/>
+                                <field name="max_retries" attrs="{'invisible': [('retry_enabled', '=', False)]}"/>
+                            </group>
+                        </page>
+                        <page string="Custom Headers">
+                            <field name="custom_headers" widget="ace" options="{'mode': 'json'}" placeholder='{"X-Custom-Header": "value"}'/>
+                        </page>
+                        <page string="Notes">
+                            <field name="notes" placeholder="Additional notes about this subscriber..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Webhook Subscriber Action -->
+    <record id="webhook_subscriber_action" model="ir.actions.act_window">
+        <field name="name">Webhook Subscribers</field>
+        <field name="res_model">webhook.subscriber</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Add your first webhook subscriber!
+            </p>
+            <p>
+                Subscribers are endpoints that receive webhook events (e.g., BridgeCore).
+            </p>
+        </field>
+    </record>
+
+</odoo>

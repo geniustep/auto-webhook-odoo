@@ -1,392 +1,131 @@
-# Auto Webhook Flutter - موديل تتبع التغييرات التلقائي
+# Auto Webhook - Enterprise Grade
 
-## 📋 نظرة عامة
+Enterprise-level webhook management system for Odoo with BridgeCore integration.
 
-موديل Odoo 18 لتسجيل تلقائي لجميع التغييرات التي تحدث على النماذج المحددة في النظام. يسجل الموديل ثلاثة أنواع من الأحداث: **إنشاء**، **تعديل**، و**حذف** السجلات.
+## 🚀 Features
 
----
+### Core Functionality
+- **Real-time Event Tracking**: Automatically track create, write, and delete operations on Odoo models
+- **Flexible Configuration**: Per-model webhook configuration with priority levels and categorization
+- **Multiple Subscribers**: Support for multiple webhook endpoints with different authentication methods
+- **Template System**: Customizable payload templates using Jinja2
+- **Intelligent Retry**: Exponential backoff retry mechanism for failed events
+- **Dead Letter Queue**: Dedicated queue for permanently failed events requiring manual intervention
+- **Comprehensive Audit Log**: Complete audit trail of all webhook activities
+- **Rate Limiting**: Control request rates per subscriber to prevent overload
+- **Batch Processing**: Optional batch processing for high-volume event scenarios
 
-## 🎯 الوظائف الرئيسية
+### Technical Highlights
+- **ORM-based Detection**: No database triggers required - uses Odoo's ORM hooks
+- **Performance Optimized**: Composite database indexes for fast queries
+- **Fail-Safe Design**: Webhook errors never block business operations
+- **Compatible**: Works with Odoo 16, 17, and 18
+- **RESTful Delivery**: Standard HTTP POST webhook delivery
+- **JSON Payloads**: Clean, structured JSON format
+- **Error Handling**: Comprehensive error handling and logging
 
-### 1. تسجيل تلقائي للأحداث
-- ✅ **Create (إنشاء)**: عند إنشاء سجل جديد
-- ✏️ **Write (تعديل)**: عند تعديل سجل موجود
-- 🗑️ **Unlink (حذف)**: عند حذف سجل
+## 📋 Requirements
 
-### 2. منع التكرار
-- يمنع تسجيل نفس الحدث مرتين لنفس السجل
-- يحذف أحداث Write القديمة عند إنشاء سجل جديد (Create)
+- Odoo 16.0, 17.0, or 18.0
+- Python 3.8+
+- Python packages: `requests`, `jinja2`
 
-### 3. إدارة الأخطاء
-- يسجل جميع الأخطاء في جدول منفصل (`webhook.errors`)
-- يمنع توقف النظام عند حدوث خطأ
+## 🔧 Installation
 
-### 4. تنظيف تلقائي
-- وظيفة Cron لتنظيف السجلات المحذوفة (Orphaned Records)
-
----
-
-## 📊 النماذج المُتتبعة (10 نماذج)
-
-الموديل يتتبع التغييرات في **10 نماذج** من Odoo:
-
-| # | النموذج | الوصف | الحالة |
-|---|---------|-------|--------|
-| 1 | `sale.order` | طلبات المبيعات | ✅ مفعل |
-| 2 | `product.template` | قوالب المنتجات | ✅ مفعل |
-| 3 | `product.category` | فئات المنتجات | ✅ مفعل |
-| 4 | `res.partner` | العملاء والموردين | ✅ مفعل |
-| 5 | `account.move` | الفواتير والقيود | ✅ مفعل |
-| 6 | `account.journal` | دفاتر اليومية | ✅ مفعل |
-| 7 | `hr.expense` | مصروفات الموظفين | ✅ مفعل |
-| 8 | `stock.picking` | عمليات النقل | ✅ مفعل |
-| 9 | `purchase.order` | طلبات الشراء | ✅ مفعل |
-| 10 | `hr.employee` | الموظفين | ✅ مفعل |
-
-**ملاحظة**: النموذج `product.product` موجود في الكود لكنه **معطل** (معلق).
-
----
-
-## 🔧 كيف يعمل الموديل؟
-
-### 1. آلية العمل (WebhookMixin)
-
-الموديل يستخدم **Abstract Model** اسمه `webhook.mixin` يقوم بـ:
-
-```python
-class WebhookMixin(models.AbstractModel):
-    _name = 'webhook.mixin'
-    
-    # يراقب create, write, unlink
-    def create(self, vals_list):
-        # ينفذ العملية الأصلية
-        records = super().create(vals_list)
-        # يسجل الحدث
-        records._log_webhook_event("create")
-        return records
-```
-
-### 2. عملية التسجيل
-
-عند حدوث أي تغيير:
-
-1. **الكشف**: يتم اكتشاف الحدث (create/write/unlink)
-2. **التسجيل**: يتم إنشاء سجل في جدول `update.webhook` يحتوي على:
-   - `model`: اسم النموذج (مثل: `sale.order`)
-   - `record_id`: رقم السجل
-   - `event`: نوع الحدث (create/write/unlink)
-   - `timestamp`: وقت الحدث
-3. **التحقق**: يتم التحقق من عدم وجود تكرار
-4. **التنظيف**: يتم حذف الأحداث القديمة إذا لزم الأمر
-
-### 3. مثال على التسجيل
-
-عند إنشاء طلب مبيعات جديد:
-
-```python
-# يتم إنشاء السجل في update.webhook:
-{
-    'model': 'sale.order',
-    'record_id': 123,
-    'event': 'create',
-    'timestamp': '2025-11-15 10:30:00'
-}
-```
-
-عند تعديل نفس الطلب:
-
-```python
-{
-    'model': 'sale.order',
-    'record_id': 123,
-    'event': 'write',
-    'timestamp': '2025-11-15 11:00:00'
-}
-```
-
----
-
-## 📁 هيكل الموديل
-
-```
-auto_webhook/
-├── __init__.py
-├── __manifest__.py
-├── models/
-│   ├── __init__.py
-│   ├── webhook.py          # WebhookMixin (القلب النابض)
-│   ├── list_model.py       # النماذج المُتتبعة (10 نماذج)
-│   └── update.py           # update.webhook, webhook.errors, webhook.cleanup.cron
-├── security/
-│   └── ir.model.access.csv
-└── views/
-    ├── update_webhook_views.xml
-    └── webhook_menuitem.xml
-```
-
----
-
-## 🗄️ الجداول في قاعدة البيانات
-
-### 1. `update_webhook`
-جدول رئيسي لتخزين جميع الأحداث:
-
-| الحقل | النوع | الوصف |
-|-------|------|-------|
-| `model` | Char | اسم النموذج |
-| `record_id` | Integer | رقم السجل |
-| `event` | Selection | نوع الحدث (create/write/unlink) |
-| `timestamp` | Datetime | وقت الحدث |
-
-**قيد فريد**: `unique(model, record_id, event)` - يمنع التكرار
-
-### 2. `webhook_errors`
-جدول لتسجيل الأخطاء:
-
-| الحقل | النوع | الوصف |
-|-------|------|-------|
-| `model` | Char | اسم النموذج |
-| `record_id` | Integer | رقم السجل |
-| `error_message` | Text | رسالة الخطأ |
-| `timestamp` | Datetime | وقت الخطأ |
-
-### 3. `webhook_cleanup_cron`
-جدول لإدارة وظيفة التنظيف التلقائي
-
-### 4. `ir_act_server_webhook_field_rel`
-جدول علاقة داخلي
-
----
-
-## 📈 إحصائيات الموديل
-
-- **عدد النماذج المُتتبعة**: 10 نماذج
-- **أنواع الأحداث**: 3 (create, write, unlink)
-- **الجداول المُنشأة**: 4 جداول
-- **الواجهات**: 2 (List View, Form View)
-- **القوائم**: 2 (القائمة الرئيسية + القائمة الفرعية)
-
----
-
-## 🚀 الاستخدام
-
-### 1. الوصول إلى السجلات
-
-من واجهة Odoo:
-- **القائمة**: Webhooks → Webhook Updates
-- يمكنك عرض جميع الأحداث المُسجلة
-- يمكنك البحث والتصفية حسب:
-  - النموذج (Model)
-  - نوع الحدث (Event)
-  - التاريخ (Timestamp)
-
-### 2. عرض السجلات
-
-```
-Webhooks → Webhook Updates
-```
-
-ستجد قائمة بجميع الأحداث:
-- Model: sale.order
-- Record ID: 123
-- Event: create
-- Timestamp: 2025-11-15 10:30:00
-
-### 3. إضافة نماذج جديدة
-
-لإضافة نموذج جديد للتتبع:
-
-1. افتح `/opt/odoo18/custom_models/auto_webhook/models/list_model.py`
-2. أضف الكلاس الجديد:
-
-```python
-class YourModel(models.Model):
-    _name = 'your.model'
-    _inherit = ['your.model', 'webhook.mixin']
-```
-
-3. أعد تشغيل Odoo أو حدث الموديل:
 ```bash
-sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 odoo/odoo-bin -c /etc/odoo18.conf -d your_db -u auto_webhook --stop-after-init --no-http"
+cd /path/to/odoo/addons
+git clone https://github.com/geniustep/auto-webhook-odoo.git
+pip install requests jinja2
 ```
 
----
+Then in Odoo: **Apps > Update Apps List > Search "Auto Webhook" > Install**
 
-## ⚙️ الإعدادات والصلاحيات
+## ⚙️ Quick Start
 
-### الصلاحيات
-- **base.group_user**: جميع المستخدمين يمكنهم:
-  - ✅ قراءة السجلات (perm_read)
-  - ✅ حذف السجلات (perm_unlink)
-  - ❌ لا يمكنهم إنشاء أو تعديل (perm_write=0, perm_create=0)
+### 1. Create Subscriber
+**Webhooks > Configuration > Subscribers > Create**
+- Name: "BridgeCore Production"
+- Endpoint URL: `https://bridgecore.geniura.com/api/v1/webhooks/receive`
+- Auth Type: Bearer Token / API Key
+- Test Connection
 
-### الأمان
-- جميع السجلات يتم إنشاؤها باستخدام `sudo()` لضمان عدم وجود مشاكل في الصلاحيات
+### 2. Configure Model
+**Webhooks > Configuration > Webhook Configs > Create**
+- Model: Select model (e.g., "Sales Order")
+- Events: Create/Write/Delete
+- Priority: High/Medium/Low
+- Subscribers: Select subscriber(s)
+- Enable configuration
 
----
+### 3. Verify
+Create/edit a record → Check **Webhooks > Events > All Events**
 
-## 🔍 أمثلة عملية
+## 📊 Usage
 
-### مثال 1: تتبع طلب مبيعات
+### Event Management
+- **View Events**: Webhooks > Events > All Events
+- **Filter**: By status, priority, model, date
+- **Retry Failed**: Open event → Click "Retry Now"
+
+### Advanced Features
+- **Field Filtering**: Track only specific fields
+- **Domain Filters**: `[('state', '=', 'done')]`
+- **Batch Processing**: High-volume scenarios
+- **Custom Templates**: Jinja2 payload formatting
+
+## 🔄 Automated Jobs
+
+| Job | Frequency | Purpose |
+|-----|-----------|---------|
+| Process Events | 1 min | Send pending events |
+| Retry Failed | 1 min | Retry with backoff |
+| Cleanup Old | Daily | Archive/delete old events |
+| Cleanup Audit | Weekly | Remove old audit logs |
+
+## 📚 Payload Format
+
+```json
+{
+  "event_id": 123,
+  "model": "sale.order",
+  "record_id": 456,
+  "event": "create",
+  "timestamp": "2025-01-15T10:30:00Z",
+  "priority": "high",
+  "category": "business",
+  "data": {
+    "name": "SO001",
+    "partner_id": {"id": 789, "name": "Customer ABC"},
+    "amount_total": 1500.00
+  }
+}
+```
+
+## 🛠️ Custom Models
 
 ```python
-# عند إنشاء طلب مبيعات جديد
-sale_order = self.env['sale.order'].create({
-    'partner_id': 1,
-    'order_line': [(0, 0, {'product_id': 1, 'product_uom_qty': 10})]
-})
+from odoo import models
 
-# يتم تسجيل:
-# update.webhook: model='sale.order', record_id=123, event='create'
+class MyModel(models.Model):
+    _name = 'my.model'
+    _inherit = ['my.model', 'webhook.mixin']
 ```
 
-### مثال 2: تتبع تعديل منتج
+Then create webhook configuration for `my.model`.
 
-```python
-# عند تعديل منتج
-product = self.env['product.template'].browse(1)
-product.write({'name': 'اسم جديد'})
+## 🤝 Support
 
-# يتم تسجيل:
-# update.webhook: model='product.template', record_id=1, event='write'
-```
+- **GitHub**: https://github.com/geniustep/auto-webhook-odoo
+- **Website**: https://www.geniustep.com
 
-### مثال 3: تتبع حذف عميل
-
-```python
-# عند حذف عميل
-partner = self.env['res.partner'].browse(1)
-partner.unlink()
-
-# يتم تسجيل:
-# update.webhook: model='res.partner', record_id=1, event='unlink'
-```
-
----
-
-## 🛠️ الصيانة والتنظيف
-
-### تنظيف السجلات المحذوفة
-
-الموديل يحتوي على وظيفة Cron لتنظيف السجلات التي تشير إلى سجلات محذوفة:
-
-```python
-# يتم استدعاؤها تلقائياً
-webhook.cleanup.cron → clean_webhook_records()
-```
-
-### تنظيف يدوي
-
-يمكنك حذف السجلات القديمة يدوياً من واجهة Odoo:
-- Webhooks → Webhook Updates
-- اختر السجلات المراد حذفها
-- اضغط Delete
-
----
-
-## 📝 السجلات (Logs)
-
-الموديل يسجل جميع العمليات في سجلات Odoo:
-
-```
-📡 WebhookMixin: Logging create for sale.order
-✅ Webhook event logged: {'model': 'sale.order', 'record_id': 123, 'event': 'create'}
-⚠️ Skipping duplicate webhook for model=sale.order record_id=123 event=create
-🗑️ Removed orphaned webhook record_id 123 from sale.order
-❌ Error logging webhook event: ...
-```
-
----
-
-## 🔗 التكامل مع FastAPI
-
-هذا الموديل مصمم للعمل مع خادم FastAPI خارجي:
-
-1. **Odoo**: يسجل الأحداث في `update.webhook`
-2. **FastAPI**: يقرأ من `update.webhook` ويرسل Webhooks للأنظمة الخارجية
-3. **Flutter App**: يستقبل التحديثات من FastAPI
-
----
-
-## 📦 المتطلبات
-
-- Odoo 18.0 Community Edition
-- Python 3.10+
-- PostgreSQL 12+
-
-### الموديلات المطلوبة (Dependencies)
-- `base`
-- `sale`
-- `product`
-- `account`
-- `purchase`
-- `stock`
-- `hr_expense`
-- `hr`
-
----
-
-## 🐛 حل المشاكل
-
-### المشكلة 1: الموديل لا يسجل الأحداث
-
-**الحل**:
-1. تأكد من أن الموديل مثبت: `Apps → auto_webhook → Installed`
-2. تحقق من السجلات: `tail -f /var/log/odoo/odoo18.log`
-3. تأكد من أن النموذج موجود في `list_model.py`
-
-### المشكلة 2: أخطاء في التسجيل
-
-**الحل**:
-1. راجع جدول `webhook.errors` من واجهة Odoo
-2. تحقق من الصلاحيات
-3. راجع السجلات للتفاصيل
-
-### المشكلة 3: سجلات مكررة
-
-**الحل**:
-- الموديل يمنع التكرار تلقائياً
-- إذا ظهرت سجلات مكررة، قد تكون من نسخة قديمة قبل التحديث
-
----
-
-## 📄 الترخيص
+## 📄 License
 
 LGPL-3
 
----
+## 👥 Authors
 
-## 👤 المؤلف
-
-Odoo Zak, Odoo SA
+Odoo Zak, Geniustep Team
 
 ---
 
-## 🌐 الموقع
-
-https://www.geniustep.com
-
----
-
-## 📌 ملاحظات مهمة
-
-1. **الأداء**: الموديل يسجل كل حدث، لذا قد يزداد حجم جدول `update.webhook` بسرعة. يُنصح بتنظيف دوري.
-
-2. **الأمان**: جميع السجلات تُنشأ باستخدام `sudo()` لضمان عدم وجود مشاكل في الصلاحيات.
-
-3. **التكرار**: الموديل يمنع التكرار تلقائياً باستخدام قيد فريد في قاعدة البيانات.
-
-4. **التوافق**: الموديل متوافق مع Odoo 18 فقط.
-
----
-
-## 📚 المراجع
-
-- [مستودع GitHub الأصلي](https://github.com/geniustep/odoo-webhook-corp)
-- [وثائق Odoo 18](https://www.odoo.com/documentation/18.0/)
-
----
-
-**آخر تحديث**: نوفمبر 2025  
-**الإصدار**: 1.0.0
-
+**Version 2.0.0** - Enterprise-Grade Webhook System for Odoo

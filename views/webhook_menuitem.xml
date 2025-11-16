@@ -1,18 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- القائمة الرئيسية Webhooks -->
-    <menuitem id="menu_webhook_root" name="Webhooks" sequence="10"/>
 
-    <!-- تعريف الإجراء (Action) قبل استخدامه في القوائم -->
-    <record id="action_update_webhook" model="ir.actions.act_window">
-        <field name="name">Webhook Updates</field>
-        <field name="res_model">update.webhook</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[]</field>
-    </record>
+    <!-- Main Webhook Menu -->
+    <menuitem id="webhook_main_menu"
+              name="Webhooks"
+              sequence="100"
+              web_icon="auto_webhook_odoo,static/description/icon.png"/>
 
-    <!-- القائمة الفرعية Webhook Updates -->
-    <menuitem id="menu_update_webhook_main" name="Webhook Updates"
-        parent="menu_webhook_root" sequence="20"
-        action="action_update_webhook"/>
+    <!-- Dashboard -->
+    <menuitem id="webhook_dashboard_menu"
+              name="Dashboard"
+              parent="webhook_main_menu"
+              action="webhook_event_action"
+              sequence="1"/>
+
+    <!-- Events -->
+    <menuitem id="webhook_events_menu"
+              name="Events"
+              parent="webhook_main_menu"
+              sequence="10"/>
+
+    <menuitem id="webhook_event_all_menu"
+              name="All Events"
+              parent="webhook_events_menu"
+              action="webhook_event_action"
+              sequence="1"/>
+
+    <!-- Configuration -->
+    <menuitem id="webhook_config_menu"
+              name="Configuration"
+              parent="webhook_main_menu"
+              sequence="90"/>
+
+    <menuitem id="webhook_config_settings_menu"
+              name="Webhook Configs"
+              parent="webhook_config_menu"
+              action="webhook_config_action"
+              sequence="1"/>
+
+    <menuitem id="webhook_subscriber_menu"
+              name="Subscribers"
+              parent="webhook_config_menu"
+              action="webhook_subscriber_action"
+              sequence="2"/>
 
 </odoo>

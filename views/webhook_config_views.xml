@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Webhook Config Tree View -->
+    <record id="webhook_config_view_tree" model="ir.ui.view">
+        <field name="name">webhook.config.tree</field>
+        <field name="model">webhook.config</field>
+        <field name="arch" type="xml">
+            <tree string="Webhook Configurations" decoration-muted="not enabled or not active">
+                <field name="name"/>
+                <field name="model_id"/>
+                <field name="priority" widget="badge"/>
+                <field name="category"/>
+                <field name="events"/>
+                <field name="enabled" widget="boolean_toggle"/>
+                <field name="active" invisible="1"/>
+                <field name="total_events"/>
+                <field name="pending_events"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Webhook Config Form View -->
+    <record id="webhook_config_view_form" model="ir.ui.view">
+        <field name="name">webhook.config.form</field>
+        <field name="model">webhook.config</field>
+        <field name="arch" type="xml">
+            <form string="Webhook Configuration">
+                <header>
+                    <button name="action_test_webhook" string="Test Webhook" type="object" class="btn-primary"/>
+                    <button name="action_view_events" string="View Events" type="object" class="btn-secondary"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button class="oe_stat_button" type="object" name="action_view_events" icon="fa-list">
+                            <field string="Events" name="total_events" widget="statinfo"/>
+                        </button>
+                        <button class="oe_stat_button" type="object" name="action_view_events" icon="fa-clock-o" attrs="{'invisible': [('pending_events', '=', 0)]}">
+                            <field string="Pending" name="pending_events" widget="statinfo"/>
+                        </button>
+                        <button class="oe_stat_button" type="object" name="action_view_events" icon="fa-exclamation-triangle" attrs="{'invisible': [('failed_events', '=', 0)]}">
+                            <field string="Failed" name="failed_events" widget="statinfo"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Disabled" bg_color="bg-danger" attrs="{'invisible': [('enabled', '=', True)]}"/>
+                    <widget name="web_ribbon" title="Archived" bg_color="bg-secondary" attrs="{'invisible': [('active', '=', True)]}"/>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="model_id"/>
+                            <field name="model_name" invisible="1"/>
+                            <field name="enabled" widget="boolean_toggle"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                        <group>
+                            <field name="priority" widget="radio"/>
+                            <field name="category"/>
+                            <field name="events" widget="selection"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Subscribers">
+                            <field name="subscribers" widget="many2many_tags"/>
+                        </page>
+                        <page string="Field Filtering">
+                            <group>
+                                <field name="filtered_fields" widget="many2many_tags" domain="[('model_id', '=', model_id)]"/>
+                                <field name="filter_domain" widget="domain" options="{'model': 'model_name'}"/>
+                            </group>
+                        </page>
+                        <page string="Template">
+                            <field name="template_id" domain="[('model_id', '=', model_id)]"/>
+                        </page>
+                        <page string="Batch Processing">
+                            <group>
+                                <field name="batch_enabled"/>
+                                <field name="batch_size" attrs="{'invisible': [('batch_enabled', '=', False)]}"/>
+                                <field name="batch_timeout" attrs="{'invisible': [('batch_enabled', '=', False)]}"/>
+                            </group>
+                        </page>
+                        <page string="Notes">
+                            <field name="notes" placeholder="Additional notes about this webhook configuration..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Webhook Config Action -->
+    <record id="webhook_config_action" model="ir.actions.act_window">
+        <field name="name">Webhook Configurations</field>
+        <field name="res_model">webhook.config</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first webhook configuration!
+            </p>
+            <p>
+                Configure webhooks for specific models to track create, write, and delete operations.
+            </p>
+        </field>
+    </record>
+
+</odoo>
