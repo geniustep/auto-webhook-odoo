@@ -1,0 +1,18 @@
+<odoo>
+    <!-- القائمة الرئيسية Webhooks -->
+    <menuitem id="menu_webhook_root" name="Webhooks" sequence="10"/>
+
+    <!-- تعريف الإجراء (Action) قبل استخدامه في القوائم -->
+    <record id="action_update_webhook" model="ir.actions.act_window">
+        <field name="name">Webhook Updates</field>
+        <field name="res_model">update.webhook</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[]</field>
+    </record>
+
+    <!-- القائمة الفرعية Webhook Updates -->
+    <menuitem id="menu_update_webhook_main" name="Webhook Updates"
+        parent="menu_webhook_root" sequence="20"
+        action="action_update_webhook"/>
+
+</odoo>

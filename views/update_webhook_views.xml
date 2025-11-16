@@ -1,0 +1,33 @@
+<odoo>
+    <!-- عرض القائمة (List View) -->
+    <record id="view_update_webhook_list" model="ir.ui.view">
+        <field name="name">update.webhook.list</field>
+        <field name="model">update.webhook</field>
+        <field name="arch" type="xml">
+            <list editable="top" create="0" delete="1" string="Webhook Updates">
+                <field name="model"/>
+                <field name="record_id"/>
+                <field name="event"/>
+                <field name="timestamp"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- عرض التفاصيل عند فتح السجل (Form View) -->
+    <record id="view_update_webhook_form" model="ir.ui.view">
+        <field name="name">update.webhook.form</field>
+        <field name="model">update.webhook</field>
+        <field name="arch" type="xml">
+            <form string="Webhook Update">
+                <sheet>
+                    <group>
+                        <field name="model"/>
+                        <field name="record_id"/>
+                        <field name="event"/>
+                        <field name="timestamp"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

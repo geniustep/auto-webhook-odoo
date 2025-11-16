@@ -1,0 +1,30 @@
+{
+    'name': 'Auto Webhook Flutter',
+    'version': '1.0.0',
+    'author': 'Odoo Zak, Odoo SA',
+    'depends': [
+        'base',
+        'sale',
+        'product',
+        'account',
+        'purchase',
+        'stock',
+        'hr_expense',
+        'hr',
+    ],
+    'description': """Automatic Webhook Registration for Odoo 18 Models. 
+        Keeps track of your records""",
+    'summary': 'Automatic Webhook Registration for Odoo 18 Models',
+    'category': 'Tools',
+    'sequence': 10,
+    'website': 'https://www.geniustep.com',
+    'license': 'LGPL-3',
+    'data': [
+        'security/ir.model.access.csv',
+        'views/update_webhook_views.xml',
+        'views/webhook_menuitem.xml',
+    ],
+    'installable': True,  
+    'auto_install': False,
+    'application': True,
+}
