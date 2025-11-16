@@ -442,6 +442,18 @@ if config and config.enabled:
     # معالجة webhook
 ```
 
+#### update.webhook
+- **الوصف**: جدول لتخزين جميع الأحداث (Pull-based)
+- **الاستخدام**: BridgeCore يمكنه سحب الأحداث من هنا
+- **الحقول الرئيسية**: `model`, `record_id`, `event`, `payload`, `is_processed`, `is_archived`
+- **API**: `/api/v1/webhooks/events` (Pull-based)
+
+#### user.sync.state
+- **الوصف**: تتبع حالة المزامنة لكل مستخدم/جهاز
+- **الاستخدام**: BridgeCore Smart Sync
+- **الحقول الرئيسية**: `user_id`, `device_id`, `app_type`, `last_event_id`, `last_sync_time`, `sync_count`
+- **Methods**: `get_or_create_state()`, `update_sync_state()`, `get_sync_statistics()`
+
 #### webhook.subscriber
 المشتركين (نقاط النهاية):
 
