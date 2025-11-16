@@ -316,7 +316,7 @@ class WebhookMixin(models.AbstractModel):
             changed_fields: Changed field names
 
         Returns:
-            Dictionary containing event payload
+            Dictionary containing event payload (all values JSON-serializable)
         """
         payload = {
             'event_type': event_type,
@@ -330,22 +330,46 @@ class WebhookMixin(models.AbstractModel):
             if record.exists():
                 payload['record_name'] = record.display_name
 
+            # Helper function to convert values to JSON-serializable format
+            def json_serialize(value):
+                """Convert value to JSON-serializable format"""
+                if value is None or isinstance(value, (str, int, float, bool)):
+                    return value
+                elif isinstance(value, (fields.Datetime, fields.Date)):
+                    return value.isoformat() if hasattr(value, 'isoformat') else str(value)
+                elif hasattr(value, 'strftime'):  # datetime/date objects
+                    return value.isoformat() if hasattr(value, 'isoformat') else value.strftime('%Y-%m-%d %H:%M:%S')
+                elif hasattr(value, '_name'):  # Odoo recordset
+                    if len(value) == 1:
+                        return value.id
+                    elif len(value) > 1:
+                        return value.ids
+                    else:
+                        return False
+                elif isinstance(value, dict):
+                    return {k: json_serialize(v) for k, v in value.items()}
+                elif isinstance(value, (list, tuple)):
+                    return [json_serialize(v) for v in value]
+                else:
+                    return str(value)
+
             # For create events
             if event_type == 'create':
-                payload['new_data'] = vals or {}
+                payload['new_data'] = json_serialize(vals) if vals else {}
 
             # For write events
             elif event_type == 'write':
                 payload['changed_fields'] = changed_fields or []
-                payload['new_data'] = vals or {}
+                payload['new_data'] = json_serialize(vals) if vals else {}
 
                 # Add old values for changed fields only
                 if old_data and changed_fields:
-                    payload['old_data'] = {
+                    old_data_filtered = {
                         field: old_data.get(field)
                         for field in changed_fields
                         if field in old_data
                     }
+                    payload['old_data'] = json_serialize(old_data_filtered)
 
             # For unlink events - payload built separately
 
