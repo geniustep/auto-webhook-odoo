@@ -193,6 +193,14 @@ class WebhookConfig(models.Model):
             webhook.config record or False
         """
         try:
+            # Check if transaction is in a failed state
+            try:
+                self.env.cr.execute("SELECT 1")
+            except Exception as tx_error:
+                # Transaction is in failed state, return False
+                _logger.warning(f"Transaction in failed state, cannot get config for {model_name}: {tx_error}")
+                return False
+            
             config = self.search([
                 ('model_name', '=', model_name),
                 ('enabled', '=', True),
@@ -209,7 +217,12 @@ class WebhookConfig(models.Model):
 
             return config
         except Exception as e:
-            _logger.error(f"Error getting config for model {model_name}: {e}")
+            error_msg = str(e)
+            # Check if it's a transaction error
+            if 'transaction' in error_msg.lower() or 'aborted' in error_msg.lower() or 'InFailedSqlTransaction' in error_msg:
+                _logger.warning(f"Transaction error getting config for model {model_name}: {e}")
+            else:
+                _logger.error(f"Error getting config for model {model_name}: {e}")
             return False
 
     @api.model

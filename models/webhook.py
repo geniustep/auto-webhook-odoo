@@ -18,10 +18,22 @@ class WebhookMixin(models.AbstractModel):
         records = super(WebhookMixin, self).create(vals_list)
 
         # Track webhook events
+        savepoint = None
         try:
             # Check if webhook.config model exists and is accessible
             if 'webhook.config' not in self.env:
                 return records
+            
+            # Check if transaction is in a failed state
+            try:
+                self.env.cr.execute("SELECT 1")
+            except Exception:
+                # Transaction is in failed state, skip webhook tracking
+                _logger.warning(f"Transaction in failed state, skipping webhook tracking for {self._name}")
+                return records
+            
+            # Create savepoint to isolate webhook operations
+            savepoint = self.env.cr.savepoint()
                 
             # Get webhook configuration for this model
             config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
@@ -42,8 +54,22 @@ class WebhookMixin(models.AbstractModel):
                         except Exception as e:
                             # Log error for this specific record but continue
                             _logger.error(f"Failed to create webhook event for {record._name}:{record.id}: {e}")
+                            # Rollback savepoint for this record
+                            if savepoint:
+                                self.env.cr.rollback(savepoint)
+                                savepoint = self.env.cr.savepoint()
+            
+            # Commit savepoint if all operations succeeded
+            if savepoint:
+                self.env.cr.release_savepoint(savepoint)
 
         except Exception as e:
+            # Rollback savepoint on any error
+            if savepoint:
+                try:
+                    self.env.cr.rollback(savepoint)
+                except Exception:
+                    pass
             # Log error but don't block the operation
             _logger.error(f"Failed to create webhook event for {self._name}: {e}", exc_info=True)
 
@@ -78,10 +104,23 @@ class WebhookMixin(models.AbstractModel):
         result = super(WebhookMixin, self).write(vals)
 
         # Track webhook events after successful write
+        # Use a savepoint to isolate webhook operations from main transaction
+        savepoint = None
         try:
             # Check if webhook.config model exists and is accessible
             if 'webhook.config' not in self.env:
                 return result
+            
+            # Check if transaction is in a failed state
+            try:
+                self.env.cr.execute("SELECT 1")
+            except Exception:
+                # Transaction is in failed state, skip webhook tracking
+                _logger.warning(f"Transaction in failed state, skipping webhook tracking for {self._name}")
+                return result
+            
+            # Create savepoint to isolate webhook operations
+            savepoint = self.env.cr.savepoint()
                 
             # Get webhook configuration for this model
             config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
@@ -106,8 +145,22 @@ class WebhookMixin(models.AbstractModel):
                     except Exception as e:
                         # Log error for this specific record but continue
                         _logger.error(f"Failed to create webhook event for {record._name}:{record.id}: {e}")
+                        # Rollback savepoint for this record
+                        if savepoint:
+                            self.env.cr.rollback(savepoint)
+                            savepoint = self.env.cr.savepoint()
+            
+            # Commit savepoint if all operations succeeded
+            if savepoint:
+                self.env.cr.release_savepoint(savepoint)
 
         except Exception as e:
+            # Rollback savepoint on any error
+            if savepoint:
+                try:
+                    self.env.cr.rollback(savepoint)
+                except Exception:
+                    pass
             # Log error but don't block the operation
             _logger.error(f"Failed to create webhook event for {self._name}: {e}", exc_info=True)
 
@@ -128,29 +181,57 @@ class WebhookMixin(models.AbstractModel):
                 records_data.append({'id': record.id, 'data': {}})
 
         # Get webhook configuration before deleting
+        savepoint = None
         try:
             # Check if webhook.config model exists and is accessible
-            if 'webhook.config' in self.env:
-                config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
+            if 'webhook.config' not in self.env:
+                return super(WebhookMixin, self).unlink()
+            
+            # Check if transaction is in a failed state
+            try:
+                self.env.cr.execute("SELECT 1")
+            except Exception:
+                # Transaction is in failed state, skip webhook tracking
+                _logger.warning(f"Transaction in failed state, skipping webhook tracking for {self._name}")
+                return super(WebhookMixin, self).unlink()
+            
+            # Create savepoint to isolate webhook operations
+            savepoint = self.env.cr.savepoint()
+            
+            config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
 
-                if config and config.enabled and 'unlink' in config.events:
-                    for record_data in records_data:
-                        try:
-                            # Create a temporary record-like object for checking
-                            record = self.browse(record_data['id'])
+            if config and config.enabled and 'unlink' in config.events:
+                for record_data in records_data:
+                    try:
+                        # Create a temporary record-like object for checking
+                        record = self.browse(record_data['id'])
 
-                            if config.should_track_event(record, 'unlink', None):
-                                # Create webhook event before deletion
-                                self._create_webhook_event_for_deleted(
-                                    record_data['id'],
-                                    config,
-                                    record_data['data']
-                                )
-                        except Exception as e:
-                            # Log error for this specific record but continue
-                            _logger.error(f"Failed to create webhook event for {self._name}:{record_data['id']}: {e}")
+                        if config.should_track_event(record, 'unlink', None):
+                            # Create webhook event before deletion
+                            self._create_webhook_event_for_deleted(
+                                record_data['id'],
+                                config,
+                                record_data['data']
+                            )
+                    except Exception as e:
+                        # Log error for this specific record but continue
+                        _logger.error(f"Failed to create webhook event for {self._name}:{record_data['id']}: {e}")
+                        # Rollback savepoint for this record
+                        if savepoint:
+                            self.env.cr.rollback(savepoint)
+                            savepoint = self.env.cr.savepoint()
+            
+            # Commit savepoint if all operations succeeded
+            if savepoint:
+                self.env.cr.release_savepoint(savepoint)
 
         except Exception as e:
+            # Rollback savepoint on any error
+            if savepoint:
+                try:
+                    self.env.cr.rollback(savepoint)
+                except Exception:
+                    pass
             # Log error but don't block the operation
             _logger.error(f"Failed to create webhook event for {self._name}: {e}", exc_info=True)
 
