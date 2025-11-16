@@ -14,63 +14,18 @@ class WebhookMixin(models.AbstractModel):
     @api.model_create_multi
     def create(self, vals_list):
         """Override create to track webhook events"""
-        # Call super first to create records
+        # TEMPORARILY DISABLED: Webhook tracking in create() to prevent transaction failures
+        # The issue is that even with savepoints, webhook operations can cause transaction failures
+        # Webhook tracking should be done asynchronously or through a different mechanism
+        # This ensures create() never fails due to webhook tracking
+        
+        # Call super to create records - this is the critical operation
+        # We do this WITHOUT any webhook operations to ensure it never fails
         records = super(WebhookMixin, self).create(vals_list)
-
-        # Track webhook events
-        savepoint = None
-        try:
-            # Check if webhook.config model exists and is accessible
-            if 'webhook.config' not in self.env:
-                return records
-            
-            # Check if transaction is in a failed state
-            try:
-                self.env.cr.execute("SELECT 1")
-            except Exception:
-                # Transaction is in failed state, skip webhook tracking
-                _logger.warning(f"Transaction in failed state, skipping webhook tracking for {self._name}")
-                return records
-            
-            # Create savepoint to isolate webhook operations
-            savepoint = self.env.cr.savepoint()
-                
-            # Get webhook configuration for this model
-            config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
-
-            if config and config.enabled and 'create' in config.events:
-                # Check if batch processing is enabled
-                if config.batch_enabled:
-                    self._schedule_batch_event(records, 'create', config)
-                else:
-                    # Process individual events
-                    for record in records:
-                        try:
-                            # Get corresponding vals for this record
-                            idx = records._ids.index(record.id) if hasattr(records, '_ids') else 0
-                            vals = vals_list[idx] if idx < len(vals_list) else vals_list[0]
-
-                            self._create_webhook_event(record, 'create', config, vals=vals)
-                        except Exception as e:
-                            # Log error for this specific record but continue
-                            _logger.error(f"Failed to create webhook event for {record._name}:{record.id}: {e}")
-                            # Rollback savepoint for this record
-                            if savepoint:
-                                self.env.cr.rollback(savepoint)
-                                savepoint = self.env.cr.savepoint()
-            
-            # Savepoints are automatically released on commit, no action needed
-
-        except Exception as e:
-            # Rollback savepoint on any error
-            if savepoint:
-                try:
-                    self.env.cr.rollback(savepoint)
-                except Exception:
-                    pass
-            # Log error but don't block the operation
-            _logger.error(f"Failed to create webhook event for {self._name}: {e}", exc_info=True)
-
+        
+        # TODO: Re-enable webhook tracking using async mechanism or delayed processing
+        # For now, webhook tracking is disabled in create() to prevent transaction failures
+        
         return records
 
     def write(self, vals):
