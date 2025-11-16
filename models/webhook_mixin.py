@@ -74,64 +74,121 @@ class WebhookMixin(models.AbstractModel):
 
     def _process_webhook_event(self, event_type, changed_vals=None):
         """
-        معالجة حدث webhook
-        
+        معالجة حدث webhook مع Dual-Write Strategy
+
+        Strategy:
+        1. دائماً: كتابة في update.webhook (للـ Pull-based access)
+        2. اختيارياً: كتابة في webhook.event (للإرسال الفوري للأحداث الحرجة)
+
         Args:
             event_type: نوع الحدث (create/write/unlink)
             changed_vals: القيم المتغيرة (للـ write فقط)
         """
         self.ensure_one()
-        
+
         # الحصول على config الخاص بالنموذج
         config = self.env['webhook.config'].get_config_for_model(self._name)
-        
+
         if not config or not config.enabled:
             _logger.debug(f"Webhook disabled for model {self._name}")
             return
-        
+
         # التحقق من نوع الحدث مفعّل
         if event_type not in config.events.split(','):
             _logger.debug(f"Event type {event_type} not enabled for {self._name}")
             return
-        
-        # الحصول على المشتركين المفعّلين
-        subscribers = config.subscriber_ids.filtered(lambda s: s.enabled)
-        
-        if not subscribers:
-            _logger.warning(f"No active subscribers for {self._name}")
+
+        # تحضير البيانات مرة واحدة
+        try:
+            payload_data = self._prepare_webhook_data(changed_vals)
+        except Exception as e:
+            _logger.error(f"Failed to prepare webhook data: {str(e)}")
             return
-        
-        # إنشاء events لكل مشترك
-        for subscriber in subscribers:
-            try:
-                # تحضير البيانات
-                payload_data = self._prepare_webhook_data(changed_vals)
-                
-                # إنشاء event
-                event = self.env['webhook.event'].create({
-                    'model': self._name,
-                    'record_id': self.id,
-                    'event': event_type,
-                    'config_id': config.id,
-                    'subscriber_id': subscriber.id,
-                    'priority': config.priority,
-                    'payload': payload_data,
-                    'status': 'pending',
-                })
-                
-                _logger.info(f"Webhook event created: {event.id} for {self._name}:{self.id}")
-                
-                # إرسال فوري إذا كان مفعّل
-                if config.instant_send:
-                    self._trigger_webhook_instant(event)
-                    
-            except Exception as e:
-                _logger.error(f"Failed to create webhook event for {subscriber.name}: {str(e)}")
+
+        # === STEP 1: كتابة في update.webhook (دائماً) ===
+        try:
+            self._write_to_update_webhook(event_type, payload_data, config)
+            _logger.debug(f"Written to update.webhook: {self._name}:{self.id} ({event_type})")
+        except Exception as e:
+            _logger.error(f"Failed to write to update.webhook: {str(e)}")
+            # لا نوقف المعالجة حتى لو فشلت الكتابة في update.webhook
+
+        # === STEP 2: قرار الإرسال الفوري ===
+        # إرسال فوري فقط إذا:
+        # - instant_send مفعّل AND priority = high
+        # - أو إذا كان هناك مشتركين نشطين
+
+        subscribers = config.subscriber_ids.filtered(lambda s: s.enabled)
+
+        if not subscribers:
+            _logger.debug(f"No active subscribers for {self._name}, skipping webhook.event creation")
+            return
+
+        # قرار: هل نرسل فوراً؟
+        should_send_instant = config.instant_send and config.priority == 'high'
+
+        # إنشاء webhook.event فقط إذا كان هناك مشتركين
+        # (للأحداث الحرجة أو حسب الحاجة)
+        if should_send_instant or config.instant_send:
+            # إنشاء events لكل مشترك
+            for subscriber in subscribers:
+                try:
+                    # إنشاء event
+                    event = self.env['webhook.event'].create({
+                        'model': self._name,
+                        'record_id': self.id,
+                        'event': event_type,
+                        'config_id': config.id,
+                        'subscriber_id': subscriber.id,
+                        'priority': config.priority,
+                        'payload': payload_data,
+                        'status': 'pending',
+                    })
+
+                    _logger.info(f"Webhook event created: {event.id} for {self._name}:{self.id}")
+
+                    # إرسال فوري للأحداث الحرجة
+                    if should_send_instant:
+                        self._trigger_webhook_instant(event)
+
+                except Exception as e:
+                    _logger.error(f"Failed to create webhook event for {subscriber.name}: {str(e)}")
+
+    def _write_to_update_webhook(self, event_type, payload_data, config):
+        """
+        كتابة الحدث في جدول update.webhook
+
+        هذه الـ method مصممة لتكون سريعة جداً (<10ms) ولا تعيق العمليات الأساسية
+
+        Args:
+            event_type: نوع الحدث (create/write/unlink)
+            payload_data: البيانات الكاملة
+            config: webhook.config record
+
+        Returns:
+            update.webhook record or False
+        """
+        try:
+            # استخدام create_event السريعة
+            # sudo() لتجنب مشاكل الصلاحيات أثناء الـ write
+            update_webhook = self.env['update.webhook'].sudo().create_event(
+                model_name=self._name,
+                record_id=self.id,
+                event_type=event_type,
+                payload_data=payload_data,
+                config=config
+            )
+
+            return update_webhook
+
+        except Exception as e:
+            _logger.error(f"Failed to write to update.webhook for {self._name}:{self.id}: {str(e)}")
+            return False
 
     def _trigger_webhook_instant(self, event):
         """
         إرسال webhook فوري بدون انتظار Cron
-        
+
         Args:
             event: webhook.event record
         """
@@ -139,63 +196,82 @@ class WebhookMixin(models.AbstractModel):
             # التحقق من حالة الـ event
             if event.status != 'pending':
                 return
-            
+
             _logger.info(f"Triggering instant webhook for event {event.id}")
-            
+
             # Commit التغييرات الحالية قبل الإرسال
             self.env.cr.commit()
-            
+
             # إرسال الـ event
             event._send_to_subscriber()
-            
+
             _logger.info(f"Instant webhook sent successfully: {event.id}")
-            
+
         except Exception as e:
             _logger.error(f"Instant webhook trigger failed for event {event.id}: {str(e)}")
             # في حالة الفشل، سيتم إعادة المحاولة عبر Cron
 
     def _process_webhook_event_for_unlinked(self, record, data):
         """
-        معالجة webhook للسجلات المحذوفة
-        
+        معالجة webhook للسجلات المحذوفة مع Dual-Write Strategy
+
         Args:
             record: السجل المحذوف
             data: بيانات السجل قبل الحذف
         """
         # الحصول على config
         config = self.env['webhook.config'].get_config_for_model(record._name)
-        
+
         if not config or not config.enabled:
             return
-        
+
         # التحقق من نوع الحدث
         if 'unlink' not in config.events.split(','):
             return
-        
-        # الحصول على المشتركين
+
+        # === STEP 1: كتابة في update.webhook (دائماً) ===
+        try:
+            self.env['update.webhook'].sudo().create_event(
+                model_name=record._name,
+                record_id=record.id,
+                event_type='unlink',
+                payload_data=data,
+                config=config
+            )
+            _logger.debug(f"Written to update.webhook: {record._name}:{record.id} (unlink)")
+        except Exception as e:
+            _logger.error(f"Failed to write unlink to update.webhook: {str(e)}")
+
+        # === STEP 2: قرار الإرسال الفوري ===
         subscribers = config.subscriber_ids.filtered(lambda s: s.enabled)
-        
-        for subscriber in subscribers:
-            try:
-                # إنشاء event
-                event = self.env['webhook.event'].create({
-                    'model': record._name,
-                    'record_id': record.id,
-                    'event': 'unlink',
-                    'config_id': config.id,
-                    'subscriber_id': subscriber.id,
-                    'priority': config.priority,
-                    'payload': data,
-                    'status': 'pending',
-                })
-                
-                # إرسال فوري إذا كان مفعّل
-                if config.instant_send:
-                    # استخدام self بدلاً من record (المحذوف)
-                    self._trigger_webhook_instant(event)
-                    
-            except Exception as e:
-                _logger.error(f"Failed to create unlink webhook event: {str(e)}")
+
+        if not subscribers:
+            return
+
+        should_send_instant = config.instant_send and config.priority == 'high'
+
+        if should_send_instant or config.instant_send:
+            for subscriber in subscribers:
+                try:
+                    # إنشاء event
+                    event = self.env['webhook.event'].create({
+                        'model': record._name,
+                        'record_id': record.id,
+                        'event': 'unlink',
+                        'config_id': config.id,
+                        'subscriber_id': subscriber.id,
+                        'priority': config.priority,
+                        'payload': data,
+                        'status': 'pending',
+                    })
+
+                    # إرسال فوري إذا كان مفعّل
+                    if should_send_instant:
+                        # استخدام self بدلاً من record (المحذوف)
+                        self._trigger_webhook_instant(event)
+
+                except Exception as e:
+                    _logger.error(f"Failed to create unlink webhook event: {str(e)}")
 
     def _prepare_webhook_data(self, changed_vals=None):
         """

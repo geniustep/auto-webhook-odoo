@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!-- Cron Job: Cleanup Old Update Webhook Events -->
+        <record id="ir_cron_update_webhook_cleanup" model="ir.cron">
+            <field name="name">Update Webhook: Cleanup Old Events</field>
+            <field name="model_id" ref="model_update_webhook"/>
+            <field name="state">code</field>
+            <field name="code">model.cleanup_old_events(days_to_archive=7, days_to_delete=30)</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+            <field name="priority">10</field>
+            <field name="user_id" ref="base.user_admin"/>
+            <field name="doall" eval="False"/>
+        </record>
+
+        <!-- Cron Job: Archive Processed Events (runs more frequently) -->
+        <record id="ir_cron_update_webhook_archive" model="ir.cron">
+            <field name="name">Update Webhook: Archive Processed Events</field>
+            <field name="model_id" ref="model_update_webhook"/>
+            <field name="state">code</field>
+            <field name="code">model.cleanup_old_events(days_to_archive=3, days_to_delete=0)</field>
+            <field name="interval_number">6</field>
+            <field name="interval_type">hours</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+            <field name="priority">20</field>
+            <field name="user_id" ref="base.user_admin"/>
+            <field name="doall" eval="False"/>
+        </record>
+
+    </data>
+</odoo>

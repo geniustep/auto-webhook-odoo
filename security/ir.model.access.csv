@@ -11,3 +11,6 @@ access_webhook_retry_user,webhook.retry.user,model_webhook_retry,base.group_user
 access_webhook_retry_manager,webhook.retry.manager,model_webhook_retry,base.group_system,1,1,1,1
 access_webhook_audit_user,webhook.audit.user,model_webhook_audit,base.group_user,1,0,0,0
 access_webhook_audit_manager,webhook.audit.manager,model_webhook_audit,base.group_system,1,1,1,1
+access_update_webhook_user,update.webhook.user,model_update_webhook,base.group_user,1,0,0,0
+access_update_webhook_manager,update.webhook.manager,model_update_webhook,base.group_system,1,1,1,1
+access_update_webhook_public,update.webhook.public,model_update_webhook,base.group_public,1,0,0,0

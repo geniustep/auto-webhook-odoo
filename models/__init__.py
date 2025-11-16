@@ -8,3 +8,4 @@ from . import webhook_audit
 from . import list_model
 from . import update  # Keep for backward compatibility
 from . import webhook_mixin
+from . import update_webhook  # New: Pull-based event storage

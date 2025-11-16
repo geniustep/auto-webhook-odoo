@@ -1,33 +1,243 @@
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- عرض القائمة (List View) -->
-    <record id="view_update_webhook_list" model="ir.ui.view">
-        <field name="name">update.webhook.list</field>
+
+    <!-- Tree View -->
+    <record id="view_update_webhook_tree" model="ir.ui.view">
+        <field name="name">update.webhook.tree</field>
         <field name="model">update.webhook</field>
         <field name="arch" type="xml">
-            <list editable="top" create="0" delete="1" string="Webhook Updates">
+            <tree string="Update Webhook Events"
+                  decoration-success="is_processed == True"
+                  decoration-muted="is_archived == True"
+                  decoration-info="priority == 'high'"
+                  decoration-warning="priority == 'medium'">
+                <field name="id"/>
                 <field name="model"/>
                 <field name="record_id"/>
                 <field name="event"/>
+                <field name="priority"/>
+                <field name="category"/>
                 <field name="timestamp"/>
-            </list>
+                <field name="user_id"/>
+                <field name="is_processed"/>
+                <field name="is_archived"/>
+                <field name="age_days"/>
+            </tree>
         </field>
     </record>
 
-    <!-- عرض التفاصيل عند فتح السجل (Form View) -->
+    <!-- Form View -->
     <record id="view_update_webhook_form" model="ir.ui.view">
         <field name="name">update.webhook.form</field>
         <field name="model">update.webhook</field>
         <field name="arch" type="xml">
-            <form string="Webhook Update">
+            <form string="Update Webhook Event" create="false" delete="false">
+                <header>
+                    <button name="action_mark_processed"
+                            string="Mark as Processed"
+                            type="object"
+                            class="btn-primary"
+                            attrs="{'invisible': [('is_processed', '=', True)]}"/>
+                    <button name="action_unmark_processed"
+                            string="Unmark as Processed"
+                            type="object"
+                            class="btn-warning"
+                            attrs="{'invisible': [('is_processed', '=', False)]}"/>
+                    <field name="is_processed" widget="statusbar"/>
+                </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="toggle_active" type="object" class="oe_stat_button" icon="fa-archive">
+                            <field name="is_archived" widget="boolean_button" options="{'terminology': 'archive'}"/>
+                        </button>
+                    </div>
+
                     <group>
-                        <field name="model"/>
-                        <field name="record_id"/>
-                        <field name="event"/>
-                        <field name="timestamp"/>
+                        <group name="basic_info" string="Basic Information">
+                            <field name="id" readonly="1"/>
+                            <field name="display_name" readonly="1"/>
+                            <field name="model" readonly="1"/>
+                            <field name="record_id" readonly="1"/>
+                            <field name="event" readonly="1"/>
+                            <field name="timestamp" readonly="1"/>
+                        </group>
+                        <group name="classification" string="Classification">
+                            <field name="priority" readonly="1"/>
+                            <field name="category" readonly="1"/>
+                            <field name="config_id" readonly="1"/>
+                            <field name="user_id" readonly="1"/>
+                        </group>
                     </group>
+
+                    <group name="status" string="Processing Status">
+                        <group>
+                            <field name="is_processed" readonly="1"/>
+                            <field name="processed_at" readonly="1" attrs="{'invisible': [('is_processed', '=', False)]}"/>
+                        </group>
+                        <group>
+                            <field name="age_days" readonly="1"/>
+                            <field name="payload_size" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Payload" name="payload">
+                            <field name="payload" widget="ace" options="{'mode': 'json'}" readonly="1"/>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>
     </record>
+
+    <!-- Search View -->
+    <record id="view_update_webhook_search" model="ir.ui.view">
+        <field name="name">update.webhook.search</field>
+        <field name="model">update.webhook</field>
+        <field name="arch" type="xml">
+            <search string="Search Update Webhook Events">
+                <field name="id"/>
+                <field name="model"/>
+                <field name="record_id"/>
+                <field name="event"/>
+                <field name="user_id"/>
+
+                <filter name="filter_pending"
+                        string="Pending"
+                        domain="[('is_processed', '=', False), ('is_archived', '=', False)]"/>
+                <filter name="filter_processed"
+                        string="Processed"
+                        domain="[('is_processed', '=', True)]"/>
+                <filter name="filter_archived"
+                        string="Archived"
+                        domain="[('is_archived', '=', True)]"/>
+
+                <separator/>
+
+                <filter name="filter_high_priority"
+                        string="High Priority"
+                        domain="[('priority', '=', 'high')]"/>
+                <filter name="filter_medium_priority"
+                        string="Medium Priority"
+                        domain="[('priority', '=', 'medium')]"/>
+                <filter name="filter_low_priority"
+                        string="Low Priority"
+                        domain="[('priority', '=', 'low')]"/>
+
+                <separator/>
+
+                <filter name="filter_create"
+                        string="Create Events"
+                        domain="[('event', '=', 'create')]"/>
+                <filter name="filter_write"
+                        string="Write Events"
+                        domain="[('event', '=', 'write')]"/>
+                <filter name="filter_unlink"
+                        string="Delete Events"
+                        domain="[('event', '=', 'unlink')]"/>
+
+                <separator/>
+
+                <filter name="filter_today"
+                        string="Today"
+                        domain="[('timestamp', '&gt;=', (context_today()).strftime('%Y-%m-%d'))]"/>
+                <filter name="filter_last_7_days"
+                        string="Last 7 Days"
+                        domain="[('timestamp', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                <filter name="filter_last_30_days"
+                        string="Last 30 Days"
+                        domain="[('timestamp', '&gt;=', (context_today() - datetime.timedelta(days=30)).strftime('%Y-%m-%d'))]"/>
+
+                <group expand="0" string="Group By">
+                    <filter name="group_by_model"
+                            string="Model"
+                            context="{'group_by': 'model'}"/>
+                    <filter name="group_by_event"
+                            string="Event Type"
+                            context="{'group_by': 'event'}"/>
+                    <filter name="group_by_priority"
+                            string="Priority"
+                            context="{'group_by': 'priority'}"/>
+                    <filter name="group_by_category"
+                            string="Category"
+                            context="{'group_by': 'category'}"/>
+                    <filter name="group_by_user"
+                            string="User"
+                            context="{'group_by': 'user_id'}"/>
+                    <filter name="group_by_date"
+                            string="Date"
+                            context="{'group_by': 'timestamp:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Kanban View -->
+    <record id="view_update_webhook_kanban" model="ir.ui.view">
+        <field name="name">update.webhook.kanban</field>
+        <field name="model">update.webhook</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile">
+                <field name="id"/>
+                <field name="model"/>
+                <field name="record_id"/>
+                <field name="event"/>
+                <field name="timestamp"/>
+                <field name="priority"/>
+                <field name="is_processed"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div t-attf-class="oe_kanban_card oe_kanban_global_click">
+                            <div class="o_kanban_record_top">
+                                <div class="o_kanban_record_headings">
+                                    <strong class="o_kanban_record_title">
+                                        <field name="model"/> #<field name="record_id"/>
+                                    </strong>
+                                </div>
+                                <span t-if="record.is_processed.raw_value" class="badge badge-success">Processed</span>
+                                <span t-else="" class="badge badge-info">Pending</span>
+                            </div>
+                            <div class="o_kanban_record_body">
+                                <field name="event" widget="badge"/>
+                                <field name="priority" widget="priority"/>
+                            </div>
+                            <div class="o_kanban_record_bottom">
+                                <div class="oe_kanban_bottom_left">
+                                    <field name="timestamp" widget="date"/>
+                                </div>
+                                <div class="oe_kanban_bottom_right">
+                                    <field name="user_id" widget="many2one_avatar_user"/>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_update_webhook" model="ir.actions.act_window">
+        <field name="name">Update Webhook Events</field>
+        <field name="res_model">update.webhook</field>
+        <field name="view_mode">tree,kanban,form</field>
+        <field name="context">{'search_default_filter_pending': 1, 'search_default_filter_last_7_days': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No webhook events found
+            </p>
+            <p>
+                Update webhook events are automatically created when records are created, updated, or deleted.
+                These events can be pulled by external systems like BridgeCore via the API.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu Items -->
+    <menuitem id="menu_update_webhook"
+              name="Update Webhooks"
+              parent="webhook_menuitem_root"
+              action="action_update_webhook"
+              sequence="15"/>
+
 </odoo>

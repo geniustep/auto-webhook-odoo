@@ -63,13 +63,14 @@ For documentation and support, visit: https://www.geniustep.com
         # Data
         'data/webhook_cron.xml',
         'data/webhook_data.xml',
+        'data/update_webhook_cron.xml',  # New: Cleanup cron for update.webhook
 
         # Views
         'views/webhook_event_views.xml',
         'views/webhook_config_views.xml',
         'views/webhook_subscriber_views.xml',
         'views/webhook_menuitem.xml',
-        # Note: update_webhook_views.xml removed - using new webhook.event model instead
+        'views/update_webhook_views.xml',  # New: Update webhook views
     ],
 
     'installable': True,
