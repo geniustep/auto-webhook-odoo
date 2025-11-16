@@ -77,9 +77,19 @@ class WebhookMixin(models.AbstractModel):
 
     def write(self, vals):
         """Override write to track webhook events"""
+        # Check transaction state before any operations
+        transaction_ok = True
+        try:
+            self.env.cr.execute("SELECT 1")
+        except Exception:
+            transaction_ok = False
+            _logger.warning(f"Transaction in failed state before write, skipping webhook tracking for {self._name}")
+        
         # Store old values before write - use safe read
         old_values = {}
-        if vals:
+        skip_webhook = False
+        
+        if vals and transaction_ok:
             for record in self:
                 try:
                     # Use read with specific fields to avoid transaction issues
@@ -91,19 +101,24 @@ class WebhookMixin(models.AbstractModel):
                     else:
                         old_values[record.id] = {}
                 except Exception as e:
-                    # If transaction is already failed, skip reading
+                    # If any error reading old values, skip webhook tracking entirely
                     error_msg = str(e)
                     if 'transaction' in error_msg.lower() or 'aborted' in error_msg.lower() or 'InFailedSqlTransaction' in error_msg:
                         _logger.warning(f"Transaction error reading old values for {record._name}:{record.id}: {error_msg}")
-                        old_values[record.id] = {}
+                        skip_webhook = True
+                        break
                     else:
                         _logger.warning(f"Could not read old values for {record._name}:{record.id}: {e}")
-                        old_values[record.id] = {}
+                        # Don't skip on non-transaction errors, just log
 
         # Call super to perform write first
         result = super(WebhookMixin, self).write(vals)
 
         # Track webhook events after successful write
+        # Skip if transaction was already failed or if we couldn't read old values
+        if skip_webhook or not transaction_ok:
+            return result
+        
         # Use a savepoint to isolate webhook operations from main transaction
         savepoint = None
         try:
@@ -111,12 +126,12 @@ class WebhookMixin(models.AbstractModel):
             if 'webhook.config' not in self.env:
                 return result
             
-            # Check if transaction is in a failed state
+            # Check transaction state again after write
             try:
                 self.env.cr.execute("SELECT 1")
             except Exception:
                 # Transaction is in failed state, skip webhook tracking
-                _logger.warning(f"Transaction in failed state, skipping webhook tracking for {self._name}")
+                _logger.warning(f"Transaction in failed state after write, skipping webhook tracking for {self._name}")
                 return result
             
             # Create savepoint to isolate webhook operations
@@ -147,12 +162,20 @@ class WebhookMixin(models.AbstractModel):
                         _logger.error(f"Failed to create webhook event for {record._name}:{record.id}: {e}")
                         # Rollback savepoint for this record
                         if savepoint:
-                            self.env.cr.rollback(savepoint)
-                            savepoint = self.env.cr.savepoint()
+                            try:
+                                self.env.cr.rollback(savepoint)
+                                savepoint = self.env.cr.savepoint()
+                            except Exception:
+                                # If savepoint rollback fails, skip remaining webhooks
+                                break
             
             # Commit savepoint if all operations succeeded
             if savepoint:
-                self.env.cr.release_savepoint(savepoint)
+                try:
+                    self.env.cr.release_savepoint(savepoint)
+                except Exception:
+                    # If release fails, transaction might be in bad state, but we already did the write
+                    pass
 
         except Exception as e:
             # Rollback savepoint on any error
