@@ -202,7 +202,8 @@ class WebhookConfig(models.Model):
                 return False
             
             # Search for existing config (including disabled ones to avoid duplicates)
-            config = self.search([
+            # Use sudo() to avoid any permission issues
+            config = self.sudo().search([
                 ('model_name', '=', model_name),
                 ('enabled', '=', True),
                 ('active', '=', True)
@@ -210,7 +211,7 @@ class WebhookConfig(models.Model):
 
             if not config:
                 # Also check for disabled configs to avoid duplicate key errors
-                existing_config = self.search([
+                existing_config = self.sudo().search([
                     ('model_name', '=', model_name)
                 ], limit=1)
                 
@@ -218,36 +219,10 @@ class WebhookConfig(models.Model):
                     # Config exists but is disabled, return False (don't auto-enable)
                     return False
                 
-                # Try to auto-create config for known models (only if transaction is clean)
-                # Use savepoint to isolate auto-create from main transaction
-                savepoint = None
-                try:
-                    savepoint = self.env.cr.savepoint()
-                    config = self._auto_create_config(model_name)
-                    # Savepoints are automatically released on commit, no action needed
-                except Exception as e:
-                    # Rollback savepoint on error
-                    if savepoint:
-                        try:
-                            self.env.cr.rollback(savepoint)
-                        except Exception:
-                            pass
-                    
-                    error_msg = str(e)
-                    # If duplicate key error, try to find the config again
-                    if 'duplicate key' in error_msg.lower() or 'unique constraint' in error_msg.lower():
-                        _logger.debug(f"Config already exists for {model_name}, searching again")
-                        config = self.search([
-                            ('model_name', '=', model_name),
-                            ('enabled', '=', True),
-                            ('active', '=', True)
-                        ], limit=1)
-                        if not config:
-                            # Config exists but is disabled
-                            return False
-                    else:
-                        _logger.warning(f"Could not auto-create config for {model_name}: {e}")
-                        return False
+                # DO NOT auto-create config - this can cause duplicate key errors
+                # Auto-creation should be done manually or through a separate process
+                # This prevents transaction failures
+                return False
 
             return config
         except Exception as e:
