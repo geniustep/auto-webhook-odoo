@@ -85,55 +85,50 @@ class WebhookMixin(models.AbstractModel):
             transaction_ok = False
             _logger.warning(f"Transaction in failed state before write, skipping webhook tracking for {self._name}")
         
-        # Store old values before write - use savepoint to isolate read operations
+        # Skip reading old values entirely if transaction is not OK
+        # This prevents any read() operations from affecting the main transaction
         old_values = {}
-        skip_webhook = False
+        skip_webhook = not transaction_ok
         
-        if vals and transaction_ok:
-            # Use savepoint to isolate read operations from main transaction
-            read_savepoint = None
+        # Only attempt to read old values if transaction is OK and we have values
+        if vals and transaction_ok and not self.env.context.get('skip_webhook_read'):
             try:
-                read_savepoint = self.env.cr.savepoint()
-                
+                # Try to read old values, but don't let failures affect main transaction
                 for record in self:
                     try:
                         # Use read with specific fields to avoid transaction issues
                         # Only read fields that are being changed
                         fields_to_read = [f for f in vals.keys() if f in record._fields]
                         if fields_to_read:
+                            # Use a simple try-except without savepoint to avoid complexity
+                            # If read fails, we'll just skip old values
                             read_result = record.read(fields_to_read)
                             old_values[record.id] = read_result[0] if read_result else {}
                         else:
                             old_values[record.id] = {}
                     except Exception as e:
-                        # If any error reading old values, skip webhook tracking entirely
+                        # If any error reading old values, just skip them
+                        # Don't let read errors affect the main transaction
                         error_msg = str(e)
                         if 'transaction' in error_msg.lower() or 'aborted' in error_msg.lower() or 'InFailedSqlTransaction' in error_msg:
                             _logger.warning(f"Transaction error reading old values for {record._name}:{record.id}: {error_msg}")
                             skip_webhook = True
                             break
                         else:
-                            _logger.warning(f"Could not read old values for {record._name}:{record.id}: {e}")
-                            # Don't skip on non-transaction errors, just log
-                
-                # Release savepoint if all reads succeeded
-                if read_savepoint and not skip_webhook:
-                    self.env.cr.release_savepoint(read_savepoint)
+                            # For non-transaction errors, just log and continue without old values
+                            _logger.debug(f"Could not read old values for {record._name}:{record.id}: {e}")
+                            old_values[record.id] = {}
             except Exception as e:
-                # Rollback savepoint on any error
-                if read_savepoint:
-                    try:
-                        self.env.cr.rollback(read_savepoint)
-                    except Exception:
-                        pass
+                # If outer try fails, skip webhook tracking
                 error_msg = str(e)
                 if 'transaction' in error_msg.lower() or 'aborted' in error_msg.lower() or 'InFailedSqlTransaction' in error_msg:
-                    _logger.warning(f"Transaction error during read savepoint for {self._name}: {error_msg}")
+                    _logger.warning(f"Transaction error during read for {self._name}: {error_msg}")
                     skip_webhook = True
                 else:
-                    _logger.warning(f"Error during read savepoint for {self._name}: {e}")
+                    _logger.warning(f"Error during read for {self._name}: {e}")
+                    skip_webhook = True
 
-        # Call super to perform write first
+        # Call super to perform write first - this is the critical operation
         result = super(WebhookMixin, self).write(vals)
 
         # Track webhook events after successful write
