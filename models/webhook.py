@@ -19,6 +19,10 @@ class WebhookMixin(models.AbstractModel):
 
         # Track webhook events
         try:
+            # Check if webhook.config model exists and is accessible
+            if 'webhook.config' not in self.env:
+                return records
+                
             # Get webhook configuration for this model
             config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
 
@@ -29,34 +33,56 @@ class WebhookMixin(models.AbstractModel):
                 else:
                     # Process individual events
                     for record in records:
-                        # Get corresponding vals for this record
-                        idx = records._ids.index(record.id) if hasattr(records, '_ids') else 0
-                        vals = vals_list[idx] if idx < len(vals_list) else vals_list[0]
+                        try:
+                            # Get corresponding vals for this record
+                            idx = records._ids.index(record.id) if hasattr(records, '_ids') else 0
+                            vals = vals_list[idx] if idx < len(vals_list) else vals_list[0]
 
-                        self._create_webhook_event(record, 'create', config, vals=vals)
+                            self._create_webhook_event(record, 'create', config, vals=vals)
+                        except Exception as e:
+                            # Log error for this specific record but continue
+                            _logger.error(f"Failed to create webhook event for {record._name}:{record.id}: {e}")
 
         except Exception as e:
             # Log error but don't block the operation
-            _logger.error(f"Failed to create webhook event for {self._name}: {e}")
+            _logger.error(f"Failed to create webhook event for {self._name}: {e}", exc_info=True)
 
         return records
 
     def write(self, vals):
         """Override write to track webhook events"""
-        # Store old values before write
+        # Store old values before write - use safe read
         old_values = {}
-        for record in self:
-            try:
-                old_values[record.id] = record.read()[0]
-            except Exception as e:
-                _logger.warning(f"Could not read old values for {record._name}:{record.id}: {e}")
-                old_values[record.id] = {}
+        if vals:
+            for record in self:
+                try:
+                    # Use read with specific fields to avoid transaction issues
+                    # Only read fields that are being changed
+                    fields_to_read = [f for f in vals.keys() if f in record._fields]
+                    if fields_to_read:
+                        read_result = record.read(fields_to_read)
+                        old_values[record.id] = read_result[0] if read_result else {}
+                    else:
+                        old_values[record.id] = {}
+                except Exception as e:
+                    # If transaction is already failed, skip reading
+                    error_msg = str(e)
+                    if 'transaction' in error_msg.lower() or 'aborted' in error_msg.lower() or 'InFailedSqlTransaction' in error_msg:
+                        _logger.warning(f"Transaction error reading old values for {record._name}:{record.id}: {error_msg}")
+                        old_values[record.id] = {}
+                    else:
+                        _logger.warning(f"Could not read old values for {record._name}:{record.id}: {e}")
+                        old_values[record.id] = {}
 
-        # Call super to perform write
+        # Call super to perform write first
         result = super(WebhookMixin, self).write(vals)
 
-        # Track webhook events
+        # Track webhook events after successful write
         try:
+            # Check if webhook.config model exists and is accessible
+            if 'webhook.config' not in self.env:
+                return result
+                
             # Get webhook configuration for this model
             config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
 
@@ -64,22 +90,26 @@ class WebhookMixin(models.AbstractModel):
                 changed_fields = set(vals.keys())
 
                 for record in self:
-                    # Check if should track this event
-                    if config.should_track_event(record, 'write', changed_fields):
-                        old_data = old_values.get(record.id, {})
+                    try:
+                        # Check if should track this event
+                        if config.should_track_event(record, 'write', changed_fields):
+                            old_data = old_values.get(record.id, {})
 
-                        self._create_webhook_event(
-                            record,
-                            'write',
-                            config,
-                            vals=vals,
-                            old_data=old_data,
-                            changed_fields=list(changed_fields)
-                        )
+                            self._create_webhook_event(
+                                record,
+                                'write',
+                                config,
+                                vals=vals,
+                                old_data=old_data,
+                                changed_fields=list(changed_fields)
+                            )
+                    except Exception as e:
+                        # Log error for this specific record but continue
+                        _logger.error(f"Failed to create webhook event for {record._name}:{record.id}: {e}")
 
         except Exception as e:
             # Log error but don't block the operation
-            _logger.error(f"Failed to create webhook event for {self._name}: {e}")
+            _logger.error(f"Failed to create webhook event for {self._name}: {e}", exc_info=True)
 
         return result
 
@@ -99,24 +129,30 @@ class WebhookMixin(models.AbstractModel):
 
         # Get webhook configuration before deleting
         try:
-            config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
+            # Check if webhook.config model exists and is accessible
+            if 'webhook.config' in self.env:
+                config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
 
-            if config and config.enabled and 'unlink' in config.events:
-                for record_data in records_data:
-                    # Create a temporary record-like object for checking
-                    record = self.browse(record_data['id'])
+                if config and config.enabled and 'unlink' in config.events:
+                    for record_data in records_data:
+                        try:
+                            # Create a temporary record-like object for checking
+                            record = self.browse(record_data['id'])
 
-                    if config.should_track_event(record, 'unlink', None):
-                        # Create webhook event before deletion
-                        self._create_webhook_event_for_deleted(
-                            record_data['id'],
-                            config,
-                            record_data['data']
-                        )
+                            if config.should_track_event(record, 'unlink', None):
+                                # Create webhook event before deletion
+                                self._create_webhook_event_for_deleted(
+                                    record_data['id'],
+                                    config,
+                                    record_data['data']
+                                )
+                        except Exception as e:
+                            # Log error for this specific record but continue
+                            _logger.error(f"Failed to create webhook event for {self._name}:{record_data['id']}: {e}")
 
         except Exception as e:
             # Log error but don't block the operation
-            _logger.error(f"Failed to create webhook event for {self._name}: {e}")
+            _logger.error(f"Failed to create webhook event for {self._name}: {e}", exc_info=True)
 
         # Call super to perform deletion
         return super(WebhookMixin, self).unlink()

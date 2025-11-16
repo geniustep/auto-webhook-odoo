@@ -192,17 +192,25 @@ class WebhookConfig(models.Model):
         Returns:
             webhook.config record or False
         """
-        config = self.search([
-            ('model_name', '=', model_name),
-            ('enabled', '=', True),
-            ('active', '=', True)
-        ], limit=1)
+        try:
+            config = self.search([
+                ('model_name', '=', model_name),
+                ('enabled', '=', True),
+                ('active', '=', True)
+            ], limit=1)
 
-        if not config:
-            # Try to auto-create config for known models
-            config = self._auto_create_config(model_name)
+            if not config:
+                # Try to auto-create config for known models (only if transaction is clean)
+                try:
+                    config = self._auto_create_config(model_name)
+                except Exception as e:
+                    _logger.warning(f"Could not auto-create config for {model_name}: {e}")
+                    return False
 
-        return config
+            return config
+        except Exception as e:
+            _logger.error(f"Error getting config for model {model_name}: {e}")
+            return False
 
     @api.model
     def _auto_create_config(self, model_name):
