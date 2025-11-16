@@ -224,8 +224,7 @@ class WebhookConfig(models.Model):
                 try:
                     savepoint = self.env.cr.savepoint()
                     config = self._auto_create_config(model_name)
-                    if savepoint:
-                        self.env.cr.release_savepoint(savepoint)
+                    # Savepoints are automatically released on commit, no action needed
                 except Exception as e:
                     # Rollback savepoint on error
                     if savepoint:

@@ -143,12 +143,15 @@ class WebhookMixin(models.AbstractModel):
                                 # If savepoint rollback fails, skip remaining webhooks
                                 break
             
-            # Commit savepoint if all operations succeeded
+            # Release savepoint if all operations succeeded
+            # Note: In psycopg2, savepoints are automatically released on commit
+            # We don't need to explicitly release them
             if savepoint:
                 try:
-                    self.env.cr.release_savepoint(savepoint)
+                    # Savepoints are automatically released, no action needed
+                    pass
                 except Exception:
-                    # If release fails, transaction might be in bad state, but we already did the write
+                    # If anything fails, transaction might be in bad state, but we already did the write
                     pass
 
         except Exception as e:
