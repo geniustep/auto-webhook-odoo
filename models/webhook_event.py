@@ -586,3 +586,105 @@ class WebhookEvent(models.Model):
                 'type': 'warning',
             }
         }
+
+    def _send_to_subscriber(self):
+        """
+        إرسال event لمشترك واحد
+        تُستخدم للإرسال الفوري
+        """
+        self.ensure_one()
+        
+        if self.status != 'pending':
+            _logger.warning(f"Event {self.id} status is {self.status}, skipping send")
+            return
+        
+        try:
+            # تغيير الحالة
+            self.write({'status': 'processing'})
+            
+            # تجهيز الـ payload
+            payload = self.payload
+            if isinstance(payload, str):
+                import json
+                payload = json.loads(payload)
+            
+            # إضافة metadata
+            payload['_webhook_metadata'] = {
+                'event_id': self.id,
+                'event_type': self.event,
+                'model': self.model,
+                'record_id': self.record_id,
+                'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            }
+            
+            # الحصول على subscriber
+            subscriber = self.subscriber_id
+            if not subscriber:
+                raise Exception("No subscriber found")
+            
+            # إرسال HTTP request
+            import requests
+            import json
+            
+            headers = {
+                'Content-Type': 'application/json',
+            }
+            
+            # إضافة المصادقة
+            if subscriber.auth_type == 'bearer':
+                headers['Authorization'] = f'Bearer {subscriber.auth_token}'
+            elif subscriber.auth_type == 'api_key':
+                key_header = subscriber.api_key_header or 'X-API-Key'
+                headers[key_header] = subscriber.api_key
+            elif subscriber.auth_type == 'basic':
+                headers['Authorization'] = f'Basic {subscriber.auth_token}'
+            
+            # إرسال الطلب
+            response = requests.post(
+                subscriber.endpoint_url,
+                json=payload,
+                headers=headers,
+                timeout=30,
+                verify=subscriber.ssl_verify if hasattr(subscriber, 'ssl_verify') else True
+            )
+            
+            # معالجة الاستجابة
+            if response.status_code in [200, 201, 204]:
+                self.write({
+                    'status': 'sent',
+                    'response_code': response.status_code,
+                    'sent_at': fields.Datetime.now(),
+                    'processing_time': (fields.Datetime.now() - self.timestamp).total_seconds() if self.timestamp else 0,
+                })
+                
+                # تسجيل في audit
+                self.env['webhook.audit'].create({
+                    'event_id': self.id,
+                    'subscriber_id': subscriber.id,
+                    'status': 'success',
+                    'response_code': response.status_code,
+                    'response_body': response.text[:1000] if response.text else '',
+                })
+                
+                _logger.info(f"Webhook sent successfully: Event {self.id}")
+                
+            else:
+                raise Exception(f"HTTP {response.status_code}: {response.text[:500]}")
+                
+        except Exception as e:
+            error_msg = str(e)
+            _logger.error(f"Webhook send failed for event {self.id}: {error_msg}")
+            
+            self.write({
+                'status': 'failed',
+                'error_message': error_msg[:500],
+                'retry_count': self.retry_count + 1,
+            })
+            
+            # تسجيل في audit
+            self.env['webhook.audit'].create({
+                'event_id': self.id,
+                'subscriber_id': self.subscriber_id.id if self.subscriber_id else False,
+                'status': 'failed',
+                'error_message': error_msg[:1000],
+            })

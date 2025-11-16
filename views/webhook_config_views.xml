@@ -51,6 +51,7 @@
                             <field name="model_id"/>
                             <field name="model_name" invisible="1"/>
                             <field name="enabled" widget="boolean_toggle"/>
+                            <field name="instant_send" attrs="{'invisible': [('enabled', '=', False)]}"/>
                             <field name="active" widget="boolean_toggle"/>
                         </group>
                         <group>

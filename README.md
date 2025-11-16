@@ -132,11 +132,14 @@ sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 od
 - URL: `https://api.bridgecore.ma/webhook`
 - الحالة: مفعّل تلقائياً (Enabled = True)
 
-✅ **6 Webhook Configs مفعّلة تلقائياً**:
+✅ **9 Webhook Configs مفعّلة تلقائياً**:
 - Sale Orders (High Priority)
 - Purchase Orders (High Priority)
 - Invoices/Account Moves (High Priority)
+- Account Payments (High Priority)
+- CRM Leads (High Priority)
 - Stock Picking (Medium Priority)
+- Stock Moves (Medium Priority)
 - Customers & Partners (Medium Priority)
 - Products (Low Priority)
 
@@ -224,7 +227,9 @@ sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 od
 
 ## 📊 النماذج المُتتبعة
 
-الموديل يتتبع التغييرات في **10 نماذج** افتراضياً:
+الموديل يتتبع التغييرات في **13 نموذج** افتراضياً:
+
+### النماذج الأساسية (10 نماذج):
 
 | # | النموذج | الوصف | الحالة |
 |---|---------|-------|--------|
@@ -238,6 +243,14 @@ sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 od
 | 8 | `stock.picking` | عمليات النقل | ✅ مفعل |
 | 9 | `purchase.order` | طلبات الشراء | ✅ مفعل |
 | 10 | `hr.employee` | الموظفين | ✅ مفعل |
+
+### النماذج الإضافية (3 نماذج):
+
+| # | النموذج | الوصف | الحالة |
+|---|---------|-------|--------|
+| 11 | `stock.move` | حركات المخزون | ✅ مفعل |
+| 12 | `account.payment` | المدفوعات | ✅ مفعل |
+| 13 | `crm.lead` | الفرص التجارية | ✅ مفعل |
 
 ### إضافة نماذج جديدة
 

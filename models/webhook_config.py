@@ -162,6 +162,13 @@ class WebhookConfig(models.Model):
         help='Number of failed events'
     )
 
+    instant_send = fields.Boolean(
+        string='Instant Send',
+        default=True,
+        help='إرسال الـ webhook فوراً بدون انتظار Cron Job. '
+            'إذا تم تعطيله، سيتم الإرسال عبر Cron Job فقط.'
+    )
+
     # SQL Constraints
     _sql_constraints = [
         ('unique_model',

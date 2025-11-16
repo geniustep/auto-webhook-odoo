@@ -7,3 +7,4 @@ from . import webhook_retry
 from . import webhook_audit
 from . import list_model
 from . import update  # Keep for backward compatibility
+from . import webhook_mixin

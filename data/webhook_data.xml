@@ -96,5 +96,44 @@
             <field name="notes">Low priority webhook for product templates. Automatically enabled and configured.</field>
         </record>
 
+        <!-- Stock Moves -->
+        <record id="webhook_config_stock_move" model="webhook.config">
+            <field name="name">Stock Moves</field>
+            <field name="model_id" ref="stock.model_stock_move"/>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="events">create,write</field>
+            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="notes">Medium priority webhook for stock movements. Automatically enabled and configured.</field>
+        </record>
+
+        <!-- Account Payments -->
+        <record id="webhook_config_account_payment" model="webhook.config">
+            <field name="name">Account Payments</field>
+            <field name="model_id" ref="account.model_account_payment"/>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="events">create,write</field>
+            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="notes">High priority webhook for account payments. Automatically enabled and configured.</field>
+        </record>
+
+        <!-- CRM Leads -->
+        <record id="webhook_config_crm_lead" model="webhook.config">
+            <field name="name">CRM Leads</field>
+            <field name="model_id" ref="crm.model_crm_lead"/>
+            <field name="enabled" eval="True"/>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="events">create,write</field>
+            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="notes">High priority webhook for CRM leads. Automatically enabled and configured.</field>
+        </record>
+
     </data>
 </odoo>
