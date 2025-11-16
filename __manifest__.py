@@ -69,6 +69,7 @@ For documentation and support, visit: https://www.geniustep.com
         'views/webhook_config_views.xml',
         'views/webhook_subscriber_views.xml',
         'views/webhook_menuitem.xml',
+        # Note: update_webhook_views.xml removed - using new webhook.event model instead
     ],
 
     'installable': True,

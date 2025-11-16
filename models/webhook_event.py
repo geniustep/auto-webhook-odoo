@@ -252,10 +252,10 @@ class WebhookEvent(models.Model):
         # Composite indexes
         indexes = [
             ('idx_webhook_event_processing', 'model, status, priority, timestamp DESC'),
-            ('idx_webhook_event_retry', 'status, next_retry_at', "WHERE status='failed'"),
+            ('idx_webhook_event_retry', 'status, next_retry_at', "status='failed'"),
             ('idx_webhook_event_subscriber', 'subscriber_id, status, timestamp DESC'),
             ('idx_webhook_event_config', 'config_id, timestamp DESC'),
-            ('idx_webhook_event_pending', 'timestamp', "WHERE status='pending'"),
+            ('idx_webhook_event_pending', 'timestamp', "status='pending'"),
         ]
 
         for index_name, columns, *where in indexes:

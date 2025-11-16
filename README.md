@@ -1,131 +1,673 @@
 # Auto Webhook - Enterprise Grade
 
-Enterprise-level webhook management system for Odoo with BridgeCore integration.
+## 📋 نظرة عامة
 
-## 🚀 Features
+**Auto Webhook** هو نظام إدارة webhooks متقدم ومتكامل لـ Odoo 18 يوفر تتبع تلقائي لجميع التغييرات في النماذج المحددة وإرسالها إلى نقاط نهاية خارجية (مثل BridgeCore API).
 
-### Core Functionality
-- **Real-time Event Tracking**: Automatically track create, write, and delete operations on Odoo models
-- **Flexible Configuration**: Per-model webhook configuration with priority levels and categorization
-- **Multiple Subscribers**: Support for multiple webhook endpoints with different authentication methods
-- **Template System**: Customizable payload templates using Jinja2
-- **Intelligent Retry**: Exponential backoff retry mechanism for failed events
-- **Dead Letter Queue**: Dedicated queue for permanently failed events requiring manual intervention
-- **Comprehensive Audit Log**: Complete audit trail of all webhook activities
-- **Rate Limiting**: Control request rates per subscriber to prevent overload
-- **Batch Processing**: Optional batch processing for high-volume event scenarios
-
-### Technical Highlights
-- **ORM-based Detection**: No database triggers required - uses Odoo's ORM hooks
-- **Performance Optimized**: Composite database indexes for fast queries
-- **Fail-Safe Design**: Webhook errors never block business operations
-- **Compatible**: Works with Odoo 16, 17, and 18
-- **RESTful Delivery**: Standard HTTP POST webhook delivery
-- **JSON Payloads**: Clean, structured JSON format
-- **Error Handling**: Comprehensive error handling and logging
-
-## 📋 Requirements
-
-- Odoo 16.0, 17.0, or 18.0
-- Python 3.8+
-- Python packages: `requests`, `jinja2`
-
-## 🔧 Installation
-
-```bash
-cd /path/to/odoo/addons
-git clone https://github.com/geniustep/auto-webhook-odoo.git
-pip install requests jinja2
-```
-
-Then in Odoo: **Apps > Update Apps List > Search "Auto Webhook" > Install**
-
-## ⚙️ Quick Start
-
-### 1. Create Subscriber
-**Webhooks > Configuration > Subscribers > Create**
-- Name: "BridgeCore Production"
-- Endpoint URL: `https://bridgecore.geniura.com/api/v1/webhooks/receive`
-- Auth Type: Bearer Token / API Key
-- Test Connection
-
-### 2. Configure Model
-**Webhooks > Configuration > Webhook Configs > Create**
-- Model: Select model (e.g., "Sales Order")
-- Events: Create/Write/Delete
-- Priority: High/Medium/Low
-- Subscribers: Select subscriber(s)
-- Enable configuration
-
-### 3. Verify
-Create/edit a record → Check **Webhooks > Events > All Events**
-
-## 📊 Usage
-
-### Event Management
-- **View Events**: Webhooks > Events > All Events
-- **Filter**: By status, priority, model, date
-- **Retry Failed**: Open event → Click "Retry Now"
-
-### Advanced Features
-- **Field Filtering**: Track only specific fields
-- **Domain Filters**: `[('state', '=', 'done')]`
-- **Batch Processing**: High-volume scenarios
-- **Custom Templates**: Jinja2 payload formatting
-
-## 🔄 Automated Jobs
-
-| Job | Frequency | Purpose |
-|-----|-----------|---------|
-| Process Events | 1 min | Send pending events |
-| Retry Failed | 1 min | Retry with backoff |
-| Cleanup Old | Daily | Archive/delete old events |
-| Cleanup Audit | Weekly | Remove old audit logs |
-
-## 📚 Payload Format
-
-```json
-{
-  "event_id": 123,
-  "model": "sale.order",
-  "record_id": 456,
-  "event": "create",
-  "timestamp": "2025-01-15T10:30:00Z",
-  "priority": "high",
-  "category": "business",
-  "data": {
-    "name": "SO001",
-    "partner_id": {"id": 789, "name": "Customer ABC"},
-    "amount_total": 1500.00
-  }
-}
-```
-
-## 🛠️ Custom Models
-
-```python
-from odoo import models
-
-class MyModel(models.Model):
-    _name = 'my.model'
-    _inherit = ['my.model', 'webhook.mixin']
-```
-
-Then create webhook configuration for `my.model`.
-
-## 🤝 Support
-
-- **GitHub**: https://github.com/geniustep/auto-webhook-odoo
-- **Website**: https://www.geniustep.com
-
-## 📄 License
-
-LGPL-3
-
-## 👥 Authors
-
-Odoo Zak, Geniustep Team
+### الإصدار
+- **الإصدار الحالي**: 2.0.0
+- **متوافق مع**: Odoo 16, 17, 18
+- **الترخيص**: LGPL-3
+- **المطور**: Odoo Zak, Geniustep
 
 ---
 
-**Version 2.0.0** - Enterprise-Grade Webhook System for Odoo
+## ✨ الميزات الرئيسية
+
+### 🎯 التتبع التلقائي
+- **تتبع في الوقت الفعلي**: تتبع تلقائي لعمليات الإنشاء، التعديل، والحذف
+- **10 نماذج مُتتبعة**: sale.order, product.template, res.partner, account.move, وغيرها
+- **كشف ذكي**: يستخدم ORM hooks بدون الحاجة إلى database triggers
+
+### ⚙️ الإعدادات المرنة
+- **إعدادات لكل نموذج**: إعدادات منفصلة لكل نموذج مع أولويات ومستويات
+- **تصنيف الأحداث**: تصنيف الأحداث حسب النوع (create/write/unlink)
+- **تصفية الحقول**: إمكانية تصفية الحقول المرسلة في payload
+
+### 🔗 المشتركين المتعددين
+- **نقاط نهاية متعددة**: دعم عدة نقاط نهاية webhook
+- **أنواع المصادقة**: Bearer Token, API Key, Basic Auth
+- **Rate Limiting**: التحكم في معدل الطلبات لكل مشترك
+- **اختبار الاتصال**: إمكانية اختبار الاتصال قبل الإرسال
+
+### 📝 نظام القوالب
+- **قوالب Jinja2**: قوالب قابلة للتخصيص باستخدام Jinja2
+- **تنسيق JSON**: تنسيق JSON منظم ونظيف
+- **حقول مخصصة**: إمكانية تضمين أو استبعاد حقول محددة
+
+### 🔄 آلية إعادة المحاولة
+- **Exponential Backoff**: إعادة محاولة ذكية مع زيادة تدريجية في الوقت
+- **Dead Letter Queue**: قائمة للأحداث الفاشلة بشكل دائم
+- **إعدادات قابلة للتخصيص**: عدد المحاولات والفواصل الزمنية
+
+### 📊 سجل التدقيق
+- **سجل كامل**: تتبع جميع أنشطة webhook
+- **معلومات الاستجابة**: حفظ كود الاستجابة ووقت المعالجة
+- **تسجيل الأخطاء**: تسجيل مفصل لجميع الأخطاء
+
+### 🚀 معالجة الدُفعات
+- **معالجة دُفعية اختيارية**: لسيناريوهات الحجم الكبير
+- **تحسين الأداء**: تقليل عدد الطلبات HTTP
+- **إعدادات قابلة للتخصيص**: حجم الدفعة والوقت المستغرق
+
+### 🔌 تكامل BridgeCore
+- **تكامل سلس**: تكامل مباشر مع BridgeCore API
+- **URL مخصص**: إمكانية تحديد BridgeCore URL لكل حدث
+- **دعم Flutter**: مصمم للعمل مع تطبيقات Flutter
+
+---
+
+## 📦 المتطلبات
+
+### متطلبات النظام
+- **Odoo**: 16.0, 17.0, أو 18.0
+- **Python**: 3.8 أو أحدث
+- **PostgreSQL**: 12 أو أحدث
+
+### المكتبات المطلوبة
+```bash
+pip install requests jinja2
+```
+
+### الموديلات المطلوبة
+- `base`
+- `mail`
+- `sale`
+- `product`
+- `account`
+- `purchase`
+- `stock`
+- `hr_expense`
+- `hr`
+
+---
+
+## 🔧 التثبيت
+
+### الطريقة 1: من GitHub
+
+```bash
+cd /opt/odoo18/custom_models
+git clone https://github.com/geniustep/auto-webhook-odoo.git auto_webhook
+cd auto_webhook
+pip install requests jinja2
+```
+
+### الطريقة 2: النسخ اليدوي
+
+```bash
+# نسخ الموديل إلى مجلد addons
+cp -r auto_webhook /opt/odoo18/custom_models/
+
+# تثبيت المكتبات
+cd /opt/odoo18
+source venv/bin/activate
+pip install requests jinja2
+```
+
+### تثبيت الموديل في Odoo
+
+#### من واجهة Odoo:
+1. افتح Odoo: `http://localhost:8069`
+2. اذهب إلى: **Apps**
+3. اضغط على **Update Apps List**
+4. ابحث عن: **Auto Webhook - Enterprise Grade**
+5. اضغط **Install**
+
+#### من سطر الأوامر:
+```bash
+sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 odoo/odoo-bin -c /etc/odoo18.conf -d your_database -i auto_webhook --stop-after-init --no-http"
+```
+
+---
+
+## 🚀 البدء السريع
+
+### 1. إنشاء مشترك (Subscriber)
+
+**المسار**: `Webhooks → Configuration → Subscribers → Create`
+
+**الحقول الأساسية**:
+- **Name**: BridgeCore Production
+- **Endpoint URL**: `https://bridgecore.geniura.com/api/v1/webhooks/receive`
+- **Auth Type**: Bearer Token / API Key
+- **Enabled**: ✓
+
+**اختبار الاتصال**:
+- اضغط على **Test Connection** للتحقق من الاتصال
+
+### 2. إنشاء إعداد Webhook (Configuration)
+
+**المسار**: `Webhooks → Configuration → Webhook Configs → Create`
+
+**الحقول الأساسية**:
+- **Name**: Sales Order Webhooks
+- **Model**: Sale Order
+- **Events**: Create, Write, Unlink
+- **Priority**: High / Medium / Low
+- **Subscribers**: اختر المشتركين
+
+### 3. تفعيل التتبع
+
+بمجرد إنشاء الإعدادات، سيتم تتبع جميع التغييرات تلقائياً:
+- عند إنشاء طلب مبيعات جديد → يتم إنشاء webhook event
+- عند تعديل طلب مبيعات → يتم إنشاء webhook event
+- عند حذف طلب مبيعات → يتم إنشاء webhook event
+
+### 4. عرض الأحداث
+
+**المسار**: `Webhooks → Dashboard → All Events`
+
+يمكنك عرض:
+- جميع الأحداث المُرسلة
+- الأحداث المعلقة
+- الأحداث الفاشلة
+- الأحداث في Dead Letter Queue
+
+---
+
+## 📊 النماذج المُتتبعة
+
+الموديل يتتبع التغييرات في **10 نماذج** افتراضياً:
+
+| # | النموذج | الوصف | الحالة |
+|---|---------|-------|--------|
+| 1 | `sale.order` | طلبات المبيعات | ✅ مفعل |
+| 2 | `product.template` | قوالب المنتجات | ✅ مفعل |
+| 3 | `product.category` | فئات المنتجات | ✅ مفعل |
+| 4 | `res.partner` | العملاء والموردين | ✅ مفعل |
+| 5 | `account.move` | الفواتير والقيود | ✅ مفعل |
+| 6 | `account.journal` | دفاتر اليومية | ✅ مفعل |
+| 7 | `hr.expense` | مصروفات الموظفين | ✅ مفعل |
+| 8 | `stock.picking` | عمليات النقل | ✅ مفعل |
+| 9 | `purchase.order` | طلبات الشراء | ✅ مفعل |
+| 10 | `hr.employee` | الموظفين | ✅ مفعل |
+
+### إضافة نماذج جديدة
+
+لإضافة نموذج جديد للتتبع:
+
+1. افتح `/opt/odoo18/custom_models/auto_webhook/models/list_model.py`
+2. أضف الكلاس الجديد:
+
+```python
+class YourModel(models.Model):
+    _name = 'your.model'
+    _inherit = ['your.model', 'webhook.mixin']
+```
+
+3. أعد تشغيل Odoo أو حدث الموديل:
+```bash
+sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 odoo/odoo-bin -c /etc/odoo18.conf -d your_db -u auto_webhook --stop-after-init --no-http"
+```
+
+---
+
+## ⚙️ الإعدادات المتقدمة
+
+### إعدادات المشترك (Subscriber)
+
+#### المصادقة (Authentication)
+
+**Bearer Token**:
+```
+Auth Type: Bearer Token
+Auth Token: your-bearer-token-here
+```
+
+**API Key**:
+```
+Auth Type: API Key
+API Key: your-api-key-here
+API Key Header: X-API-Key (اختياري)
+```
+
+**Basic Auth**:
+```
+Auth Type: Basic Auth
+Auth Token: base64(username:password)
+```
+
+#### Rate Limiting
+
+```
+Rate Limit: 100 (طلبات في الدقيقة)
+Rate Limit Window: 60 (ثانية)
+```
+
+#### Retry Settings
+
+```
+Retry Enabled: ✓
+Max Retries: 3
+```
+
+### إعدادات Webhook Config
+
+#### تصفية الحقول
+
+يمكنك تحديد الحقول المراد تضمينها أو استبعادها:
+
+```
+Filtered Fields: name, amount_total, partner_id
+```
+
+#### معالجة الدُفعات
+
+```
+Batch Enabled: ✓
+Batch Size: 50 (أحداث في الدفعة)
+Batch Timeout: 30 (ثانية)
+```
+
+#### القوالب
+
+يمكنك استخدام قوالب Jinja2 مخصصة:
+
+```jinja2
+{
+    "model": "{{ model }}",
+    "record_id": {{ record_id }},
+    "event": "{{ event }}",
+    "data": {
+        "name": "{{ name }}",
+        "amount": {{ amount_total }}
+    }
+}
+```
+
+---
+
+## 📝 أمثلة الاستخدام
+
+### مثال 1: تتبع طلب مبيعات جديد
+
+```python
+# عند إنشاء طلب مبيعات جديد
+sale_order = self.env['sale.order'].create({
+    'partner_id': 1,
+    'order_line': [(0, 0, {'product_id': 1, 'product_uom_qty': 10})]
+})
+
+# يتم تلقائياً:
+# 1. إنشاء webhook event في جدول webhook_event
+# 2. إرسال webhook إلى جميع المشتركين المفعّلين
+# 3. تسجيل النتيجة في webhook_audit
+```
+
+### مثال 2: تتبع تعديل منتج
+
+```python
+# عند تعديل منتج
+product = self.env['product.template'].browse(1)
+product.write({'name': 'اسم جديد', 'list_price': 100})
+
+# يتم تلقائياً:
+# 1. إنشاء webhook event مع changed_fields
+# 2. إرسال webhook مع الحقول المتغيرة فقط
+```
+
+### مثال 3: تتبع حذف عميل
+
+```python
+# عند حذف عميل
+partner = self.env['res.partner'].browse(1)
+partner.unlink()
+
+# يتم تلقائياً:
+# 1. إنشاء webhook event من نوع 'unlink'
+# 2. إرسال webhook مع بيانات السجل المحذوف
+```
+
+### مثال 4: إعادة محاولة يدوية
+
+```python
+# من واجهة Odoo:
+# Webhooks → Dashboard → All Events
+# اختر حدث فاشل → Retry Now
+
+# أو من Python:
+event = self.env['webhook.event'].browse(1)
+event.action_retry_now()
+```
+
+---
+
+## 🔍 API والواجهات
+
+### النماذج (Models)
+
+#### webhook.event
+النموذج الرئيسي لتخزين الأحداث:
+
+```python
+event = self.env['webhook.event'].create({
+    'model': 'sale.order',
+    'record_id': 123,
+    'event': 'create',
+    'priority': 'high',
+    'subscriber_id': 1,
+    'payload': {'name': 'SO001', 'amount': 1000}
+})
+```
+
+#### webhook.config
+إعدادات webhook لكل نموذج:
+
+```python
+config = self.env['webhook.config'].get_config_for_model('sale.order')
+if config and config.enabled:
+    # معالجة webhook
+```
+
+#### webhook.subscriber
+المشتركين (نقاط النهاية):
+
+```python
+subscriber = self.env['webhook.subscriber'].browse(1)
+subscriber.action_test_connection()
+```
+
+### الطرق (Methods)
+
+#### إنشاء حدث يدوياً
+
+```python
+self.env['webhook.event'].create_event(
+    model_name='sale.order',
+    record_id=123,
+    event_type='create',
+    config=config,
+    subscriber=subscriber
+)
+```
+
+#### معالجة الأحداث المعلقة
+
+```python
+self.env['webhook.event'].process_pending_events(limit=100)
+```
+
+#### معالجة إعادة المحاولة
+
+```python
+self.env['webhook.event'].process_retries()
+```
+
+---
+
+## 🗄️ هيكل قاعدة البيانات
+
+### الجداول الرئيسية
+
+#### webhook_event
+جدول الأحداث الرئيسي:
+
+| الحقل | النوع | الوصف |
+|-------|------|-------|
+| `model` | Char | اسم النموذج |
+| `record_id` | Integer | رقم السجل |
+| `event` | Selection | نوع الحدث (create/write/unlink) |
+| `status` | Selection | الحالة (pending/processing/sent/failed/dead) |
+| `priority` | Selection | الأولوية (high/medium/low) |
+| `payload` | Text | JSON payload |
+| `timestamp` | Datetime | وقت الحدث |
+| `retry_count` | Integer | عدد المحاولات |
+| `error_message` | Text | رسالة الخطأ |
+
+#### webhook_config
+إعدادات webhook:
+
+| الحقل | النوع | الوصف |
+|-------|------|-------|
+| `name` | Char | اسم الإعداد |
+| `model_id` | Many2one | النموذج |
+| `events` | Selection | أنواع الأحداث |
+| `enabled` | Boolean | مفعّل |
+| `priority` | Selection | الأولوية |
+| `batch_enabled` | Boolean | معالجة دُفعية |
+
+#### webhook_subscriber
+المشتركين:
+
+| الحقل | النوع | الوصف |
+|-------|------|-------|
+| `name` | Char | اسم المشترك |
+| `endpoint_url` | Char | URL نقطة النهاية |
+| `auth_type` | Selection | نوع المصادقة |
+| `auth_token` | Char | Token المصادقة |
+| `enabled` | Boolean | مفعّل |
+| `rate_limit` | Integer | حد المعدل |
+
+### الجداول الإضافية
+
+- `webhook_template` - قوالب Payload
+- `webhook_retry` - معلومات إعادة المحاولة
+- `webhook_audit` - سجل التدقيق
+- `update_webhook` - للتوافق مع الإصدار القديم
+
+---
+
+## 🔄 Cron Jobs
+
+الموديل يحتوي على 4 وظائف Cron تلقائية:
+
+### 1. Process Pending Events
+- **التكرار**: كل دقيقة
+- **الوظيفة**: معالجة الأحداث المعلقة
+- **الحد**: 100 حدث في المرة
+
+### 2. Retry Failed Events
+- **التكرار**: كل دقيقة
+- **الوظيفة**: إعادة محاولة الأحداث الفاشلة
+- **الحد الأقصى**: حسب إعدادات المشترك
+
+### 3. Cleanup Old Events
+- **التكرار**: يومياً
+- **الوظيفة**: حذف الأحداث القديمة (أكثر من 90 يوم)
+
+### 4. Cleanup Old Audit Logs
+- **التكرار**: أسبوعياً
+- **الوظيفة**: حذف سجلات التدقيق القديمة (أكثر من 180 يوم)
+
+---
+
+## 🛠️ الصيانة والتنظيف
+
+### تنظيف الأحداث القديمة
+
+```python
+# تنظيف الأحداث الأقدم من 90 يوم
+self.env['webhook.event'].cleanup_old_events(days=90)
+
+# تنظيف سجلات التدقيق الأقدم من 180 يوم
+self.env['webhook_audit'].cleanup_old_logs(days=180)
+```
+
+### إحصائيات
+
+```python
+# عدد الأحداث المعلقة
+pending = self.env['webhook.event'].search_count([('status', '=', 'pending')])
+
+# عدد الأحداث الفاشلة
+failed = self.env['webhook.event'].search_count([('status', '=', 'failed')])
+
+# معدل النجاح
+total = self.env['webhook.event'].search_count([])
+sent = self.env['webhook.event'].search_count([('status', '=', 'sent')])
+success_rate = (sent / total) * 100 if total > 0 else 0
+```
+
+---
+
+## 🐛 حل المشاكل
+
+### المشكلة 1: الموديل لا يسجل الأحداث
+
+**الأعراض**: لا يتم إنشاء webhook events عند التغييرات
+
+**الحلول**:
+1. تأكد من أن الموديل مثبت: `Apps → auto_webhook → Installed`
+2. تحقق من وجود webhook config مفعّل للنموذج
+3. تحقق من السجلات: `tail -f /var/log/odoo/odoo18.log`
+4. تأكد من أن النموذج موجود في `list_model.py`
+
+### المشكلة 2: الأحداث لا تُرسل
+
+**الأعراض**: يتم إنشاء events لكن لا تُرسل
+
+**الحلول**:
+1. تحقق من وجود مشتركين مفعّلين
+2. تحقق من صحة URL نقطة النهاية
+3. اختبر الاتصال: `Subscribers → Test Connection`
+4. راجع جدول `webhook_audit` للأخطاء
+
+### المشكلة 3: أخطاء في المصادقة
+
+**الأعراض**: `401 Unauthorized` أو `403 Forbidden`
+
+**الحلول**:
+1. تحقق من صحة Token/API Key
+2. تحقق من نوع المصادقة (Bearer/API Key/Basic)
+3. تحقق من headers المطلوبة
+4. راجع سجلات webhook_audit
+
+### المشكلة 4: أداء بطيء
+
+**الأعراض**: بطء في معالجة الأحداث
+
+**الحلول**:
+1. فعّل معالجة الدُفعات (Batch Processing)
+2. زد حجم الدفعة (Batch Size)
+3. راجع Rate Limiting
+4. تحقق من فهارس قاعدة البيانات
+
+### المشكلة 5: أحداث مكررة
+
+**الأعراض**: نفس الحدث يُرسل عدة مرات
+
+**الحلول**:
+1. تحقق من إعدادات Retry
+2. راجع webhook_audit للتحقق من التكرار
+3. تحقق من Cron Jobs (قد تكون مكررة)
+
+---
+
+## 📈 الأداء والتحسين
+
+### أفضل الممارسات
+
+1. **استخدم معالجة الدُفعات** للأحجام الكبيرة
+2. **فعّل Rate Limiting** لتجنب إرهاق الخادم
+3. **استخدم الأولويات** للأحداث المهمة
+4. **نظف الأحداث القديمة** دورياً
+5. **راقب webhook_audit** بانتظام
+
+### التحسينات
+
+- **الفهارس**: الموديل ينشئ فهارس مركبة تلقائياً
+- **التخزين المؤقت**: استخدام cache للـ configs
+- **المعالجة غير المتزامنة**: الأحداث لا تعيق العمليات الأساسية
+
+---
+
+## 🔐 الأمان
+
+### الصلاحيات
+
+- **base.group_user**: قراءة الأحداث
+- **base.group_system**: إدارة كاملة (configs, subscribers)
+
+### أفضل الممارسات الأمنية
+
+1. **استخدم HTTPS** لجميع endpoints
+2. **استخدم Bearer Tokens** بدلاً من API Keys عند الإمكان
+3. **فعّل SSL Verification**
+4. **راقب webhook_audit** للأنشطة المشبوهة
+5. **استخدم Rate Limiting** لمنع الهجمات
+
+---
+
+## 📚 المراجع والروابط
+
+- **المستودع**: https://github.com/geniustep/auto-webhook-odoo
+- **الموقع**: https://www.geniustep.com
+- **وثائق Odoo 18**: https://www.odoo.com/documentation/18.0/
+- **Jinja2 Documentation**: https://jinja.palletsprojects.com/
+
+---
+
+## 🤝 المساهمة
+
+نرحب بالمساهمات! يرجى:
+
+1. Fork المستودع
+2. إنشاء branch جديد (`git checkout -b feature/amazing-feature`)
+3. Commit التغييرات (`git commit -m 'Add amazing feature'`)
+4. Push إلى branch (`git push origin feature/amazing-feature`)
+5. فتح Pull Request
+
+---
+
+## 📄 الترخيص
+
+هذا المشروع مرخص تحت **LGPL-3 License**.
+
+---
+
+## 👥 المؤلفون
+
+- **Odoo Zak** - المطور الرئيسي
+- **Geniustep** - الشركة المطورة
+
+---
+
+## 📞 الدعم
+
+للحصول على الدعم:
+- **البريد الإلكتروني**: info@geniustep.com
+- **الموقع**: https://www.geniustep.com
+- **GitHub Issues**: https://github.com/geniustep/auto-webhook-odoo/issues
+
+---
+
+## 📝 سجل التغييرات (Changelog)
+
+### الإصدار 2.0.0 (2025-11-16)
+- ✨ نظام Enterprise-grade كامل
+- ✨ تكامل BridgeCore
+- ✨ نظام القوالب Jinja2
+- ✨ آلية Retry متقدمة
+- ✨ Dead Letter Queue
+- ✨ Audit Logging شامل
+- ✨ Rate Limiting
+- ✨ Batch Processing
+- 🐛 إصلاحات التوافق مع Odoo 18
+
+### الإصدار 1.0.0 (2025-11-15)
+- 🎉 الإصدار الأولي
+- ✨ تتبع تلقائي لـ 10 نماذج
+- ✨ تسجيل الأحداث الأساسي
+
+---
+
+## 🎯 خارطة الطريق
+
+### الميزات القادمة
+- [ ] Webhook Signature Verification
+- [ ] Webhook Event Filtering Rules
+- [ ] Webhook Event Transformation
+- [ ] Webhook Dashboard Analytics
+- [ ] Webhook Event Replay
+- [ ] Webhook Event Export/Import
+
+---
+
+**آخر تحديث**: نوفمبر 2025  
+**الإصدار**: 2.0.0  
+**الحالة**: ✅ Production Ready
+
+---
+
+*Made with ❤️ by Geniustep Team*

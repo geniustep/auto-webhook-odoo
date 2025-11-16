@@ -5,19 +5,20 @@
     <record id="webhook_event_view_tree" model="ir.ui.view">
         <field name="name">webhook.event.tree</field>
         <field name="model">webhook.event</field>
+        <field name="type">list</field>
         <field name="arch" type="xml">
-            <tree string="Webhook Events" decoration-success="status=='sent'" decoration-danger="status=='failed'" decoration-warning="status=='pending'" decoration-muted="status=='dead'">
+            <list string="Webhook Events">
                 <field name="timestamp"/>
                 <field name="model"/>
                 <field name="record_id"/>
                 <field name="event"/>
-                <field name="priority" widget="badge" decoration-danger="priority=='high'" decoration-warning="priority=='medium'" decoration-info="priority=='low'"/>
+                <field name="priority" widget="badge"/>
                 <field name="category"/>
                 <field name="status" widget="badge"/>
                 <field name="retry_count"/>
                 <field name="subscriber_id"/>
                 <field name="error_message" optional="hide"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -28,13 +29,13 @@
         <field name="arch" type="xml">
             <form string="Webhook Event">
                 <header>
-                    <button name="action_retry_now" string="Retry Now" type="object" attrs="{'invisible': [('can_retry', '=', False)]}" class="btn-primary"/>
-                    <button name="action_mark_dead" string="Move to Dead Letter" type="object" attrs="{'invisible': [('status', 'not in', ['pending', 'failed'])]}" class="btn-warning"/>
+                    <button name="action_retry_now" string="Retry Now" type="object" invisible="[('can_retry', '=', False)]" class="btn-primary"/>
+                    <button name="action_mark_dead" string="Move to Dead Letter" type="object" invisible="[('status', 'not in', ['pending', 'failed'])]" class="btn-warning"/>
                     <field name="status" widget="statusbar" statusbar_visible="pending,processing,sent"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
-                        <button class="oe_stat_button" icon="fa-refresh" name="action_retry_now" type="object" attrs="{'invisible': [('can_retry', '=', False)]}">
+                        <button class="oe_stat_button" icon="fa-refresh" name="action_retry_now" type="object" invisible="[('can_retry', '=', False)]">
                             <div class="o_stat_info">
                                 <span class="o_stat_text">Retry</span>
                             </div>
@@ -56,7 +57,7 @@
                             <field name="bridgecore_url" widget="url"/>
                         </group>
                     </group>
-                    <group string="Retry Information" attrs="{'invisible': [('retry_count', '=', 0)]}">
+                    <group string="Retry Information" invisible="[('retry_count', '=', 0)]">
                         <group>
                             <field name="retry_count"/>
                             <field name="max_retries"/>
@@ -67,12 +68,12 @@
                             <field name="next_retry_in"/>
                         </group>
                     </group>
-                    <group string="Error Information" attrs="{'invisible': [('error_message', '=', False)]}">
+                    <group string="Error Information" invisible="[('error_message', '=', False)]">
                         <field name="error_type"/>
                         <field name="error_code"/>
                         <field name="error_message" nolabel="1"/>
                     </group>
-                    <group string="Response Information" attrs="{'invisible': [('sent_at', '=', False)]}">
+                    <group string="Response Information" invisible="[('sent_at', '=', False)]">
                         <group>
                             <field name="sent_at"/>
                             <field name="response_code"/>
@@ -86,7 +87,7 @@
                         <page string="Payload">
                             <field name="payload" widget="ace" options="{'mode': 'json'}"/>
                         </page>
-                        <page string="Changed Fields" attrs="{'invisible': [('changed_fields', '=', False)]}">
+                        <page string="Changed Fields" invisible="[('changed_fields', '=', False)]">
                             <field name="changed_fields" widget="ace" options="{'mode': 'json'}"/>
                         </page>
                     </notebook>
@@ -113,8 +114,6 @@
                 <filter string="Medium Priority" name="filter_medium" domain="[('priority', '=', 'medium')]"/>
                 <filter string="Low Priority" name="filter_low" domain="[('priority', '=', 'low')]"/>
                 <separator/>
-                <filter string="Today" name="filter_today" domain="[('timestamp', '&gt;=', context_today().strftime('%Y-%m-%d'))]"/>
-                <filter string="Last 7 Days" name="filter_week" domain="[('timestamp', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
                 <group expand="0" string="Group By">
                     <filter string="Model" name="group_model" context="{'group_by': 'model'}"/>
                     <filter string="Status" name="group_status" context="{'group_by': 'status'}"/>
@@ -130,7 +129,7 @@
     <record id="webhook_event_action" model="ir.actions.act_window">
         <field name="name">Webhook Events</field>
         <field name="res_model">webhook.event</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="context">{'search_default_filter_pending': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
