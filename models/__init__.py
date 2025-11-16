@@ -1,3 +1,4 @@
+from . import webhook_mixin  # Must be imported first for inheritance
 from . import webhook
 from . import webhook_event
 from . import webhook_config
@@ -5,7 +6,7 @@ from . import webhook_subscriber
 from . import webhook_template
 from . import webhook_retry
 from . import webhook_audit
-from . import list_model
 from . import update  # Keep for backward compatibility
-from . import webhook_mixin
 from . import update_webhook  # New: Pull-based event storage
+from . import user_sync_state  # New: Track sync state for BridgeCore Smart Sync
+from . import list_model  # Must be imported after webhook_mixin

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List View -->
+    <record id="view_user_sync_state_list" model="ir.ui.view">
+        <field name="name">user.sync.state.list</field>
+        <field name="model">user.sync.state</field>
+        <field name="type">list</field>
+        <field name="arch" type="xml">
+            <list string="User Sync States" default_order="last_sync_time desc">
+                <field name="user_id"/>
+                <field name="device_id"/>
+                <field name="app_type"/>
+                <field name="last_event_id"/>
+                <field name="last_sync_time"/>
+                <field name="sync_count"/>
+                <field name="total_events_synced"/>
+                <field name="is_active"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_user_sync_state_form" model="ir.ui.view">
+        <field name="name">user.sync.state.form</field>
+        <field name="model">user.sync.state</field>
+        <field name="arch" type="xml">
+            <form string="User Sync State">
+                <header>
+                    <button name="reset_sync_state" type="object" string="Reset State" class="oe_highlight"/>
+                    <button name="deactivate" type="object" string="Deactivate" invisible="[('is_active', '=', False)]"/>
+                    <button name="activate" type="object" string="Activate" invisible="[('is_active', '=', True)]"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="display_name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Basic Information">
+                            <field name="user_id"/>
+                            <field name="device_id"/>
+                            <field name="app_type"/>
+                            <field name="is_active"/>
+                        </group>
+                        <group string="Sync State">
+                            <field name="last_event_id"/>
+                            <field name="last_sync_time"/>
+                            <field name="sync_count"/>
+                            <field name="last_event_count"/>
+                            <field name="total_events_synced"/>
+                        </group>
+                    </group>
+                    <group string="Device Information">
+                        <field name="app_version"/>
+                        <field name="device_info"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_user_sync_state_search" model="ir.ui.view">
+        <field name="name">user.sync.state.search</field>
+        <field name="model">user.sync.state</field>
+        <field name="arch" type="xml">
+            <search string="Search Sync States">
+                <field name="user_id"/>
+                <field name="device_id"/>
+                <field name="app_type"/>
+                <filter string="Active" name="active" domain="[('is_active', '=', True)]"/>
+                <filter string="Inactive" name="inactive" domain="[('is_active', '=', False)]"/>
+                <separator/>
+                <filter string="Sales App" name="sales_app" domain="[('app_type', '=', 'sales_app')]"/>
+                <filter string="Delivery App" name="delivery_app" domain="[('app_type', '=', 'delivery_app')]"/>
+                <filter string="Warehouse App" name="warehouse_app" domain="[('app_type', '=', 'warehouse_app')]"/>
+                <filter string="Manager App" name="manager_app" domain="[('app_type', '=', 'manager_app')]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter string="User" name="group_user" context="{'group_by': 'user_id'}"/>
+                    <filter string="App Type" name="group_app_type" context="{'group_by': 'app_type'}"/>
+                    <filter string="Active Status" name="group_active" context="{'group_by': 'is_active'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_user_sync_state" model="ir.actions.act_window">
+        <field name="name">User Sync States</field>
+        <field name="res_model">user.sync.state</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_active': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No sync states found
+            </p>
+            <p>
+                Sync states are automatically created when mobile apps connect.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu -->
+    <menuitem id="menu_user_sync_state"
+              name="Sync States"
+              parent="webhook_main_menu"
+              action="action_user_sync_state"
+              sequence="20"/>
+</odoo>

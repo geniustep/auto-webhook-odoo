@@ -71,6 +71,7 @@ For documentation and support, visit: https://www.geniustep.com
         'views/webhook_subscriber_views.xml',
         'views/webhook_menuitem.xml',
         'views/update_webhook_views.xml',  # New: Update webhook views
+        'views/user_sync_state_views.xml',  # New: User sync state views
     ],
 
     'installable': True,

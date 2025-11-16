@@ -35,12 +35,70 @@ class WebhookMixin(models.AbstractModel):
         """Override write للتتبع التلقائي"""
         result = super(WebhookMixin, self).write(vals)
         
-        # معالجة webhook لكل سجل
+        # الحل: كتابة في update.webhook فقط (بدون webhook.event)
+        # webhook.event سيتم إنشاؤه لاحقاً بواسطة cron job من update.webhook
+        # هذا يضمن أن write() سريع ولا يسبب مشاكل
+        
         for record in self:
             try:
-                record._process_webhook_event('write', vals)
+                # التحقق من حالة transaction
+                try:
+                    self.env.cr.execute("SELECT 1")
+                except Exception:
+                    _logger.warning(f"Transaction in failed state, skipping webhook for {record._name}:{record.id}")
+                    continue
+                
+                # فقط كتابة في update.webhook (سريع وآمن)
+                # استخدام sudo() لتجنب مشاكل الصلاحيات
+                try:
+                    # التحقق من وجود webhook.config
+                    if 'webhook.config' not in self.env:
+                        continue
+                    
+                    # استخدام sudo() للحصول على config
+                    config = self.env['webhook.config'].sudo().get_config_for_model(record._name)
+                    if not config or not config.enabled:
+                        continue
+                    
+                    if 'write' not in config.events.split(','):
+                        continue
+                    
+                    # استخدام sudo() لتحضير البيانات وتجنب مشاكل الصلاحيات
+                    record_sudo = record.sudo()
+                    
+                    # تحضير البيانات بشكل آمن
+                    # استخدام getattr للتحقق من وجود method
+                    if not hasattr(record_sudo, '_prepare_webhook_data'):
+                        _logger.warning(f"_prepare_webhook_data not found for {record._name}:{record.id}")
+                        continue
+                    
+                    try:
+                        payload_data = record_sudo._prepare_webhook_data(vals)
+                    except AttributeError:
+                        _logger.warning(f"Cannot access _prepare_webhook_data for {record._name}:{record.id}")
+                        continue
+                    except Exception as e:
+                        _logger.warning(f"Failed to prepare webhook data for {record._name}:{record.id}: {str(e)}")
+                        continue
+                    
+                    # التحقق من وجود _write_to_update_webhook
+                    if not hasattr(record_sudo, '_write_to_update_webhook'):
+                        _logger.warning(f"_write_to_update_webhook not found for {record._name}:{record.id}")
+                        continue
+                    
+                    # كتابة في update.webhook فقط (باستخدام sudo)
+                    try:
+                        record_sudo._write_to_update_webhook('write', payload_data, config)
+                    except AttributeError:
+                        _logger.warning(f"Cannot access _write_to_update_webhook for {record._name}:{record.id}")
+                    except Exception as e:
+                        _logger.error(f"Failed to write to update.webhook for {record._name}:{record.id}: {str(e)}", exc_info=True)
+                except Exception as e:
+                    _logger.error(f"Webhook config check failed for {record._name}:{record.id}: {str(e)}", exc_info=True)
+                    # لا نرفع الخطأ - نستمر
             except Exception as e:
-                _logger.error(f"Webhook processing failed for {record._name}.write: {str(e)}")
+                _logger.error(f"Webhook processing failed for {record._name}:{record.id}: {str(e)}", exc_info=True)
+                # لا نرفع الخطأ - نستمر
         
         return result
 
@@ -102,7 +160,8 @@ class WebhookMixin(models.AbstractModel):
         try:
             payload_data = self._prepare_webhook_data(changed_vals)
         except Exception as e:
-            _logger.error(f"Failed to prepare webhook data: {str(e)}")
+            _logger.error(f"Failed to prepare webhook data for {self._name}:{self.id}: {str(e)}", exc_info=True)
+            # لا نرفع الخطأ - نعود بدون معالجة webhook
             return
 
         # === STEP 1: كتابة في update.webhook (دائماً) ===
@@ -110,15 +169,20 @@ class WebhookMixin(models.AbstractModel):
             self._write_to_update_webhook(event_type, payload_data, config)
             _logger.debug(f"Written to update.webhook: {self._name}:{self.id} ({event_type})")
         except Exception as e:
-            _logger.error(f"Failed to write to update.webhook: {str(e)}")
+            _logger.error(f"Failed to write to update.webhook for {self._name}:{self.id}: {str(e)}", exc_info=True)
             # لا نوقف المعالجة حتى لو فشلت الكتابة في update.webhook
+            # نستمر في محاولة إنشاء webhook.event إذا لزم الأمر
 
         # === STEP 2: قرار الإرسال الفوري ===
         # إرسال فوري فقط إذا:
         # - instant_send مفعّل AND priority = high
         # - أو إذا كان هناك مشتركين نشطين
 
-        subscribers = config.subscriber_ids.filtered(lambda s: s.enabled)
+        try:
+            subscribers = config.subscriber_ids.filtered(lambda s: s.enabled)
+        except Exception as e:
+            _logger.error(f"Failed to get subscribers for {self._name}:{self.id}: {str(e)}", exc_info=True)
+            return
 
         if not subscribers:
             _logger.debug(f"No active subscribers for {self._name}, skipping webhook.event creation")
@@ -134,7 +198,7 @@ class WebhookMixin(models.AbstractModel):
             for subscriber in subscribers:
                 try:
                     # إنشاء event
-                    event = self.env['webhook.event'].create({
+                    event = self.env['webhook.event'].sudo().create({
                         'model': self._name,
                         'record_id': self.id,
                         'event': event_type,
@@ -149,10 +213,14 @@ class WebhookMixin(models.AbstractModel):
 
                     # إرسال فوري للأحداث الحرجة
                     if should_send_instant:
-                        self._trigger_webhook_instant(event)
+                        try:
+                            self._trigger_webhook_instant(event)
+                        except Exception as e:
+                            _logger.error(f"Failed to trigger instant webhook for event {event.id}: {str(e)}", exc_info=True)
 
                 except Exception as e:
-                    _logger.error(f"Failed to create webhook event for {subscriber.name}: {str(e)}")
+                    _logger.error(f"Failed to create webhook event for {subscriber.name} ({self._name}:{self.id}): {str(e)}", exc_info=True)
+                    # نستمر في محاولة إنشاء events للمشتركين الآخرين
 
     def _write_to_update_webhook(self, event_type, payload_data, config):
         """
@@ -285,7 +353,8 @@ class WebhookMixin(models.AbstractModel):
         """
         self.ensure_one()
         
-        config = self.env['webhook.config'].get_config_for_model(self._name)
+        # استخدام sudo() لتجنب مشاكل الصلاحيات
+        config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
         
         # الحصول على الحقول المطلوبة
         if config and config.filtered_fields:
@@ -305,6 +374,15 @@ class WebhookMixin(models.AbstractModel):
                 if not field:
                     continue
                 
+                # تخطي الحقول المحسوبة التي قد تسبب مشاكل
+                if field.compute and not field.store:
+                    continue
+                
+                # تخطي الحقول الثنائية الكبيرة
+                if field.type == 'binary':
+                    data[field_name] = bool(getattr(self, field_name, None))
+                    continue
+                
                 value = getattr(self, field_name, None)
                 
                 # معالجة أنواع الحقول المختلفة
@@ -314,19 +392,17 @@ class WebhookMixin(models.AbstractModel):
                         'name': value.display_name if value else ''
                     }
                 elif field.type in ['one2many', 'many2many']:
-                    data[field_name] = [{'id': r.id, 'name': r.display_name} for r in value]
+                    # تقليل البيانات المرسلة
+                    data[field_name] = [{'id': r.id, 'name': r.display_name} for r in value[:100]]  # حد أقصى 100
                 elif field.type == 'datetime':
                     data[field_name] = value.isoformat() if value else False
                 elif field.type == 'date':
                     data[field_name] = value.isoformat() if value else False
-                elif field.type == 'binary':
-                    # تجنب إرسال البيانات الثنائية الكبيرة
-                    data[field_name] = bool(value)
                 else:
                     data[field_name] = value
                     
             except Exception as e:
-                _logger.warning(f"Failed to get field {field_name}: {str(e)}")
+                _logger.warning(f"Failed to get field {field_name} for {self._name}:{self.id}: {str(e)}")
                 data[field_name] = None
         
         # إضافة معلومات إضافية

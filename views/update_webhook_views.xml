@@ -1,15 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- Tree View -->
+    <!-- List View -->
     <record id="view_update_webhook_tree" model="ir.ui.view">
         <field name="name">update.webhook.tree</field>
         <field name="model">update.webhook</field>
+        <field name="type">list</field>
         <field name="arch" type="xml">
-            <tree string="Update Webhook Events"
+            <list string="Update Webhook Events"
                   decoration-success="is_processed == True"
-                  decoration-muted="is_archived == True"
-                  decoration-info="priority == 'high'"
                   decoration-warning="priority == 'medium'">
                 <field name="id"/>
                 <field name="model"/>
@@ -22,7 +21,7 @@
                 <field name="is_processed"/>
                 <field name="is_archived"/>
                 <field name="age_days"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -37,13 +36,13 @@
                             string="Mark as Processed"
                             type="object"
                             class="btn-primary"
-                            attrs="{'invisible': [('is_processed', '=', True)]}"/>
+                            invisible="[('is_processed', '=', True)]"/>
                     <button name="action_unmark_processed"
                             string="Unmark as Processed"
                             type="object"
                             class="btn-warning"
-                            attrs="{'invisible': [('is_processed', '=', False)]}"/>
-                    <field name="is_processed" widget="statusbar"/>
+                            invisible="[('is_processed', '=', False)]"/>
+                    <field name="is_processed" widget="boolean_toggle"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -72,7 +71,7 @@
                     <group name="status" string="Processing Status">
                         <group>
                             <field name="is_processed" readonly="1"/>
-                            <field name="processed_at" readonly="1" attrs="{'invisible': [('is_processed', '=', False)]}"/>
+                            <field name="processed_at" readonly="1" invisible="[('is_processed', '=', False)]"/>
                         </group>
                         <group>
                             <field name="age_days" readonly="1"/>
@@ -220,7 +219,7 @@
     <record id="action_update_webhook" model="ir.actions.act_window">
         <field name="name">Update Webhook Events</field>
         <field name="res_model">update.webhook</field>
-        <field name="view_mode">tree,kanban,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="context">{'search_default_filter_pending': 1, 'search_default_filter_last_7_days': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
@@ -236,7 +235,7 @@
     <!-- Menu Items -->
     <menuitem id="menu_update_webhook"
               name="Update Webhooks"
-              parent="webhook_menuitem_root"
+              parent="webhook_main_menu"
               action="action_update_webhook"
               sequence="15"/>
 
