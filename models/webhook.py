@@ -77,63 +77,20 @@ class WebhookMixin(models.AbstractModel):
 
     def write(self, vals):
         """Override write to track webhook events"""
-        # Check transaction state before any operations
-        transaction_ok = True
-        try:
-            self.env.cr.execute("SELECT 1")
-        except Exception:
-            transaction_ok = False
-            _logger.warning(f"Transaction in failed state before write, skipping webhook tracking for {self._name}")
+        # DO NOT read old values before write - this can cause transaction failures
+        # We'll track webhook events after write without old values if needed
+        # This ensures write() never fails due to webhook tracking
         
-        # Skip reading old values entirely if transaction is not OK
-        # This prevents any read() operations from affecting the main transaction
-        old_values = {}
-        skip_webhook = not transaction_ok
+        # Check if we should skip webhook tracking entirely
+        skip_webhook = self.env.context.get('skip_webhook', False)
         
-        # Only attempt to read old values if transaction is OK and we have values
-        if vals and transaction_ok and not self.env.context.get('skip_webhook_read'):
-            try:
-                # Try to read old values, but don't let failures affect main transaction
-                for record in self:
-                    try:
-                        # Use read with specific fields to avoid transaction issues
-                        # Only read fields that are being changed
-                        fields_to_read = [f for f in vals.keys() if f in record._fields]
-                        if fields_to_read:
-                            # Use a simple try-except without savepoint to avoid complexity
-                            # If read fails, we'll just skip old values
-                            read_result = record.read(fields_to_read)
-                            old_values[record.id] = read_result[0] if read_result else {}
-                        else:
-                            old_values[record.id] = {}
-                    except Exception as e:
-                        # If any error reading old values, just skip them
-                        # Don't let read errors affect the main transaction
-                        error_msg = str(e)
-                        if 'transaction' in error_msg.lower() or 'aborted' in error_msg.lower() or 'InFailedSqlTransaction' in error_msg:
-                            _logger.warning(f"Transaction error reading old values for {record._name}:{record.id}: {error_msg}")
-                            skip_webhook = True
-                            break
-                        else:
-                            # For non-transaction errors, just log and continue without old values
-                            _logger.debug(f"Could not read old values for {record._name}:{record.id}: {e}")
-                            old_values[record.id] = {}
-            except Exception as e:
-                # If outer try fails, skip webhook tracking
-                error_msg = str(e)
-                if 'transaction' in error_msg.lower() or 'aborted' in error_msg.lower() or 'InFailedSqlTransaction' in error_msg:
-                    _logger.warning(f"Transaction error during read for {self._name}: {error_msg}")
-                    skip_webhook = True
-                else:
-                    _logger.warning(f"Error during read for {self._name}: {e}")
-                    skip_webhook = True
-
         # Call super to perform write first - this is the critical operation
+        # We do this BEFORE any webhook operations to ensure it never fails
         result = super(WebhookMixin, self).write(vals)
 
         # Track webhook events after successful write
-        # Skip if transaction was already failed or if we couldn't read old values
-        if skip_webhook or not transaction_ok:
+        # Skip if explicitly requested
+        if skip_webhook:
             return result
         
         # Use a savepoint to isolate webhook operations from main transaction
@@ -143,7 +100,7 @@ class WebhookMixin(models.AbstractModel):
             if 'webhook.config' not in self.env:
                 return result
             
-            # Check transaction state again after write
+            # Check transaction state after write
             try:
                 self.env.cr.execute("SELECT 1")
             except Exception:
@@ -164,14 +121,14 @@ class WebhookMixin(models.AbstractModel):
                     try:
                         # Check if should track this event
                         if config.should_track_event(record, 'write', changed_fields):
-                            old_data = old_values.get(record.id, {})
-
+                            # Don't use old_data - we didn't read it to avoid transaction issues
+                            # The payload will only contain new values
                             self._create_webhook_event(
                                 record,
                                 'write',
                                 config,
                                 vals=vals,
-                                old_data=old_data,
+                                old_data=None,  # No old data to avoid transaction issues
                                 changed_fields=list(changed_fields)
                             )
                     except Exception as e:
