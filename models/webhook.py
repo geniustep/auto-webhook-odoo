@@ -59,9 +59,7 @@ class WebhookMixin(models.AbstractModel):
                                 self.env.cr.rollback(savepoint)
                                 savepoint = self.env.cr.savepoint()
             
-            # Commit savepoint if all operations succeeded
-            if savepoint:
-                self.env.cr.release_savepoint(savepoint)
+            # Savepoints are automatically released on commit, no action needed
 
         except Exception as e:
             # Rollback savepoint on any error
@@ -221,9 +219,7 @@ class WebhookMixin(models.AbstractModel):
                             self.env.cr.rollback(savepoint)
                             savepoint = self.env.cr.savepoint()
             
-            # Commit savepoint if all operations succeeded
-            if savepoint:
-                self.env.cr.release_savepoint(savepoint)
+            # Savepoints are automatically released on commit, no action needed
 
         except Exception as e:
             # Rollback savepoint on any error
