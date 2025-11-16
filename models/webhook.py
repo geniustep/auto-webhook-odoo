@@ -91,6 +91,14 @@ class WebhookMixin(models.AbstractModel):
         if skip_webhook:
             return result
         
+        # Check transaction state IMMEDIATELY after write - before any webhook operations
+        try:
+            self.env.cr.execute("SELECT 1")
+        except Exception:
+            # Transaction is in failed state, skip webhook tracking completely
+            _logger.warning(f"Transaction in failed state after write, skipping webhook tracking for {self._name}")
+            return result
+        
         # Use a savepoint to isolate webhook operations from main transaction
         savepoint = None
         try:
@@ -98,18 +106,11 @@ class WebhookMixin(models.AbstractModel):
             if 'webhook.config' not in self.env:
                 return result
             
-            # Check transaction state after write
-            try:
-                self.env.cr.execute("SELECT 1")
-            except Exception:
-                # Transaction is in failed state, skip webhook tracking
-                _logger.warning(f"Transaction in failed state after write, skipping webhook tracking for {self._name}")
-                return result
-            
-            # Create savepoint to isolate webhook operations
+            # Create savepoint to isolate webhook operations BEFORE any webhook calls
             savepoint = self.env.cr.savepoint()
                 
             # Get webhook configuration for this model
+            # This call is now inside savepoint, so any errors won't affect main transaction
             config = self.env['webhook.config'].sudo().get_config_for_model(self._name)
 
             if config and config.enabled and 'write' in config.events:
