@@ -2,10 +2,13 @@
 <odoo>
     <data noupdate="0">
 
-        <!-- Default BridgeCore Subscriber - Enabled by default -->
+        <!-- Default BridgeCore Subscriber - Hybrid System (Pull + Push) -->
+        <!-- Note: BridgeCore uses Hybrid System:
+             - Pull-based: All events stored in update.webhook (BridgeCore pulls via /api/webhooks/pull)
+             - Push-based: Critical events only (priority=high + instant_send=True) sent immediately -->
         <record id="webhook_subscriber_bridgecore" model="webhook.subscriber">
             <field name="name">BridgeCore Default Endpoint</field>
-            <field name="endpoint_url">https://api.bridgecore.ma/webhook</field>
+            <field name="endpoint_url">https://bridgecore.geniura.com/api/v1/webhooks/receive</field>
             <field name="auth_type">bearer</field>
             <field name="enabled" eval="True"/>
             <field name="active" eval="True"/>
@@ -13,7 +16,7 @@
             <field name="verify_ssl" eval="True"/>
             <field name="retry_enabled" eval="True"/>
             <field name="max_retries">5</field>
-            <field name="notes">Default BridgeCore webhook endpoint. Configure auth_token if needed.</field>
+            <field name="notes">Push-based webhook for critical events (priority=high) only. BridgeCore uses Pull-based (update.webhook) for normal events. Auth token will be configured after BridgeCore Push endpoint is ready.</field>
         </record>
 
         <!-- Default Webhook Configurations for Critical Models - All Enabled by Default -->
@@ -27,8 +30,9 @@
             <field name="priority">high</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
+            <field name="instant_send" eval="True"/>
             <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
-            <field name="notes">High priority webhook for sales orders. Automatically enabled and configured.</field>
+            <field name="notes">High priority webhook for sales orders. Push-based for instant delivery, Pull-based for reliability.</field>
         </record>
 
         <!-- Purchase Orders -->
@@ -40,8 +44,9 @@
             <field name="priority">high</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
+            <field name="instant_send" eval="True"/>
             <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
-            <field name="notes">High priority webhook for purchase orders. Automatically enabled and configured.</field>
+            <field name="notes">High priority webhook for purchase orders. Push-based for instant delivery, Pull-based for reliability.</field>
         </record>
 
         <!-- Invoices / Account Moves -->
@@ -53,8 +58,9 @@
             <field name="priority">high</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
+            <field name="instant_send" eval="True"/>
             <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
-            <field name="notes">High priority webhook for invoices and account moves. Automatically enabled and configured.</field>
+            <field name="notes">High priority webhook for invoices and account moves. Push-based for instant delivery, Pull-based for reliability.</field>
         </record>
 
         <!-- Stock Picking -->
@@ -66,8 +72,9 @@
             <field name="priority">medium</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
+            <field name="instant_send" eval="False"/>
             <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
-            <field name="notes">Medium priority webhook for stock movements. Automatically enabled and configured.</field>
+            <field name="notes">Medium priority webhook for stock movements. Pull-based only (no instant push).</field>
         </record>
 
         <!-- Customers / Partners -->
@@ -79,8 +86,9 @@
             <field name="priority">medium</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
+            <field name="instant_send" eval="False"/>
             <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
-            <field name="notes">Medium priority webhook for customers and partners. Automatically enabled and configured.</field>
+            <field name="notes">Medium priority webhook for customers and partners. Pull-based only (no instant push).</field>
         </record>
 
         <!-- Products -->
@@ -92,8 +100,9 @@
             <field name="priority">low</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
+            <field name="instant_send" eval="False"/>
             <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
-            <field name="notes">Low priority webhook for product templates. Automatically enabled and configured.</field>
+            <field name="notes">Low priority webhook for product templates. Pull-based only (no instant push).</field>
         </record>
 
         <!-- Stock Moves -->
@@ -105,8 +114,9 @@
             <field name="priority">medium</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
+            <field name="instant_send" eval="False"/>
             <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
-            <field name="notes">Medium priority webhook for stock movements. Automatically enabled and configured.</field>
+            <field name="notes">Medium priority webhook for stock movements. Pull-based only (no instant push).</field>
         </record>
 
         <!-- Account Payments -->
@@ -118,21 +128,9 @@
             <field name="priority">high</field>
             <field name="category">business</field>
             <field name="events">create,write</field>
+            <field name="instant_send" eval="True"/>
             <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
-            <field name="notes">High priority webhook for account payments. Automatically enabled and configured.</field>
-        </record>
-
-        <!-- CRM Leads -->
-        <record id="webhook_config_crm_lead" model="webhook.config">
-            <field name="name">CRM Leads</field>
-            <field name="model_id" ref="crm.model_crm_lead"/>
-            <field name="enabled" eval="True"/>
-            <field name="active" eval="True"/>
-            <field name="priority">high</field>
-            <field name="category">business</field>
-            <field name="events">create,write</field>
-            <field name="subscribers" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
-            <field name="notes">High priority webhook for CRM leads. Automatically enabled and configured.</field>
+            <field name="notes">High priority webhook for account payments. Push-based for instant delivery, Pull-based for reliability.</field>
         </record>
 
     </data>

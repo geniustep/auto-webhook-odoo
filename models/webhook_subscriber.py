@@ -323,6 +323,23 @@ class WebhookSubscriber(models.Model):
         """
         self.ensure_one()
 
+        # First, try a simple HEAD or GET request to check if endpoint exists
+        try:
+            # Try HEAD request first (lighter)
+            response = requests.head(
+                self.endpoint_url,
+                timeout=5,
+                verify=self.verify_ssl,
+                allow_redirects=True
+            )
+            # If HEAD works, endpoint exists
+            if response.status_code < 500:
+                endpoint_exists = True
+            else:
+                endpoint_exists = False
+        except:
+            endpoint_exists = False
+
         test_payload = {
             'test': True,
             'message': 'Connection test from Odoo Webhook Module',
@@ -336,15 +353,37 @@ class WebhookSubscriber(models.Model):
             if result['success']:
                 return {
                     'status': 'success',
-                    'message': _('Connection test successful'),
+                    'message': _('Connection test successful (Status: %s)') % result['status_code'],
                     'response_code': result['status_code'],
                 }
             else:
+                error_msg = result['body'].get('error') or result['body'].get('detail') or 'Unknown error'
+                status_code = result.get('status_code', 'N/A')
+                
+                # More detailed error message
+                if status_code == 404:
+                    error_msg = _('Endpoint not found (404). The URL may be incorrect or BridgeCore may use Pull-based webhooks only. Please verify the endpoint URL with BridgeCore documentation.')
+                elif status_code == 401:
+                    error_msg = _('Authentication failed (401). Please check your auth token in the subscriber settings.')
+                elif status_code == 403:
+                    error_msg = _('Access forbidden (403). Please check your authentication token and permissions.')
+                elif status_code == 405:
+                    error_msg = _('Method not allowed (405). This endpoint may not support POST requests.')
+                elif status_code == 503:
+                    error_msg = _('Service unavailable (503). The endpoint may be down or unreachable.')
+                elif status_code == 408:
+                    error_msg = _('Request timeout (408). The server took too long to respond. Try increasing the timeout value.')
+                else:
+                    # Include response body if available
+                    body_detail = result['body'].get('detail') or result['body'].get('error') or ''
+                    if body_detail:
+                        error_msg = f"{error_msg} ({body_detail})"
+                
                 return {
                     'status': 'error',
-                    'message': _('Connection test failed'),
-                    'response_code': result['status_code'],
-                    'error': result['body'].get('error', 'Unknown error'),
+                    'message': _('Connection test failed (Status: %s) - %s') % (status_code, error_msg),
+                    'response_code': status_code,
+                    'error': error_msg,
                 }
 
         except Exception as e:

@@ -94,11 +94,12 @@ class AccountPayment(models.Model):
     _description = 'Account Payment with Webhook Tracking'
 
 
-class CrmLead(models.Model):
-    """الفرص التجارية"""
-    _name = 'crm.lead'
-    _inherit = ['crm.lead', 'webhook.mixin']
-    _description = 'CRM Lead with Webhook Tracking'
+# class CrmLead(models.Model):
+#     """الفرص التجارية"""
+#     _name = 'crm.lead'
+#     _inherit = ['crm.lead', 'webhook.mixin']
+#     _description = 'CRM Lead with Webhook Tracking'
+# Note: Uncomment if crm module is installed
 
 
 # class ProjectTask(models.Model):

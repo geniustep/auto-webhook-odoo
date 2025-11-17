@@ -56,6 +56,13 @@
 - **URL مخصص**: إمكانية تحديد BridgeCore URL لكل حدث
 - **دعم Flutter**: مصمم للعمل مع تطبيقات Flutter
 
+### 🔄 Hybrid System (Pull + Push)
+- **Pull-based (للأحداث العادية)**: جميع الأحداث مخزنة في `update.webhook` - BridgeCore يسحب الأحداث عبر `/api/webhooks/pull`
+- **Push-based (للأحداث الحرجة)**: الأحداث الحرجة (priority=high + instant_send=True) تُرسل فوراً إلى BridgeCore
+- **موثوقية عالية**: Pull-based يضمن عدم فقدان الأحداث
+- **Real-time للأحداث المهمة**: Push-based للأحداث الحرجة فقط
+- **أداء محسّن**: تقليل الحمل على النظام بإرسال Push للأحداث الحرجة فقط
+
 ### 🔄 Dual-Write System
 - **نظام Dual-Write**: كتابة في `webhook.event` و `update.webhook` معاً
 - **Pull-based API**: BridgeCore يمكنه سحب الأحداث عبر API
@@ -142,7 +149,7 @@ sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 od
 
 ✅ **Subscriber افتراضي**:
 - الاسم: BridgeCore Default Endpoint
-- URL: `https://api.bridgecore.ma/webhook`
+- URL: `https://bridgecore.geniura.com/api/v1/webhooks/receive`
 - الحالة: مفعّل تلقائياً (Enabled = True)
 
 ✅ **9 Webhook Configs مفعّلة تلقائياً**:
@@ -195,13 +202,19 @@ sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 od
 
 ### 📍 أين يتم الإرسال؟
 
-**يتم الإرسال إلى**: `endpoint_url` الخاص بـ **Subscriber**
+#### Pull-based (للأحداث العادية):
+- **التخزين**: جميع الأحداث مخزنة في `update.webhook`
+- **السحب**: BridgeCore يسحب من `/api/webhooks/pull`
+- **النماذج**: جميع النماذج (medium/low priority) + backup للأحداث الحرجة
 
-**الافتراضي**: `https://api.bridgecore.ma/webhook`
+#### Push-based (للأحداث الحرجة فقط):
+- **الإرسال إلى**: `endpoint_url` الخاص بـ **Subscriber**
+- **الافتراضي**: `https://bridgecore.geniura.com/api/v1/webhooks/receive`
+- **الطريقة**: HTTP POST request فوري
+- **متى**: فوراً للأحداث الحرجة (priority=high + instant_send=True)
+- **النماذج**: Sale Orders, Purchase Orders, Invoices, Account Payments
 
-**الطريقة**: HTTP POST request
-
-**متى**: بواسطة Cron Job كل دقيقة للأحداث المعلقة (pending)
+**ملاحظة**: الأحداث الحرجة تُرسل Push فوراً + تُخزن في `update.webhook` للـ Pull (Dual-Write)
 
 ---
 

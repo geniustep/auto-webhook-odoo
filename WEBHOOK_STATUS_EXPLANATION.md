@@ -47,7 +47,7 @@
   Event ID: 151
   Status: processing
   Subscriber: BridgeCore Default Endpoint
-  URL: https://api.bridgecore.ma/webhook
+  URL: https://bridgecore.geniura.com/api/v1/webhooks/receive
   ```
 
 - **الانتقال التالي:**
