@@ -353,3 +353,190 @@ class WebhookPullAPI(http.Controller):
                 'Access-Control-Max-Age': '86400',
             }
         )
+
+    # ===== User Sync State Endpoints =====
+
+    @http.route('/api/webhooks/sync-state', type='http', auth='public', methods=['GET', 'POST'], csrf=False, cors='*')
+    def get_or_create_sync_state(self, **kwargs):
+        """
+        Get or create sync state for a user/device
+
+        Query Parameters (GET) or JSON Body (POST):
+            user_id (int): User ID (required)
+            device_id (str): Device unique identifier (required)
+            app_type (str): Application type (optional, default: mobile_app)
+            device_info (str): Device information (optional)
+            app_version (str): App version (optional)
+
+        Returns:
+            JSON response with sync state data
+        """
+        try:
+            # Authenticate
+            user = self._get_auth_user()
+            if not user:
+                return self._error_response("Authentication required", status=401)
+
+            # Get parameters from GET or POST
+            if request.httprequest.method == 'POST':
+                try:
+                    params = json.loads(request.httprequest.data.decode('utf-8'))
+                except Exception as e:
+                    return self._error_response(f"Invalid JSON body: {str(e)}", status=400)
+            else:
+                params = kwargs
+
+            # Extract and validate parameters
+            user_id = int(params.get('user_id', 0))
+            device_id = params.get('device_id', '').strip()
+            app_type = params.get('app_type', 'mobile_app')
+            device_info = params.get('device_info', '')
+            app_version = params.get('app_version', '')
+
+            if not user_id or not device_id:
+                return self._error_response("user_id and device_id are required", status=400)
+
+            _logger.info(f"Get or create sync state: user_id={user_id}, device_id={device_id}, app_type={app_type}")
+
+            # Get or create sync state
+            sync_state = request.env['user.sync.state'].sudo().get_or_create_state(
+                user_id=user_id,
+                device_id=device_id,
+                app_type=app_type
+            )
+
+            # Update device info and app version if provided
+            if device_info or app_version:
+                state_record = request.env['user.sync.state'].sudo().browse(sync_state['id'])
+                update_vals = {}
+                if device_info:
+                    update_vals['device_info'] = device_info
+                if app_version:
+                    update_vals['app_version'] = app_version
+                if update_vals:
+                    state_record.write(update_vals)
+                    sync_state['device_info'] = device_info
+                    sync_state['app_version'] = app_version
+
+            return self._make_response({
+                'success': True,
+                'sync_state': sync_state,
+                'timestamp': datetime.now().isoformat(),
+            })
+
+        except ValueError as e:
+            return self._error_response(f"Invalid parameter: {str(e)}", status=400)
+        except Exception as e:
+            _logger.error(f"Get or create sync state failed: {e}", exc_info=True)
+            return self._error_response(f"Internal server error: {str(e)}", status=500)
+
+    @http.route('/api/webhooks/sync-state/update', type='http', auth='public', methods=['POST'], csrf=False, cors='*')
+    def update_sync_state(self, **kwargs):
+        """
+        Update sync state after pulling events
+
+        JSON Body:
+            user_id (int): User ID (required)
+            device_id (str): Device unique identifier (required)
+            last_event_id (int): Last event ID synced (required)
+            events_synced (int): Number of events synced (optional)
+
+        Returns:
+            JSON response with updated sync state
+        """
+        try:
+            # Authenticate
+            user = self._get_auth_user()
+            if not user:
+                return self._error_response("Authentication required", status=401)
+
+            # Get request body
+            try:
+                data = json.loads(request.httprequest.data.decode('utf-8'))
+            except Exception as e:
+                return self._error_response(f"Invalid JSON body: {str(e)}", status=400)
+
+            # Extract and validate parameters
+            user_id = int(data.get('user_id', 0))
+            device_id = data.get('device_id', '').strip()
+            last_event_id = int(data.get('last_event_id', 0))
+            events_synced = int(data.get('events_synced', 0))
+
+            if not user_id or not device_id:
+                return self._error_response("user_id and device_id are required", status=400)
+
+            if last_event_id < 0:
+                return self._error_response("last_event_id must be non-negative", status=400)
+
+            _logger.info(f"Update sync state: user_id={user_id}, device_id={device_id}, last_event_id={last_event_id}")
+
+            # Update sync state
+            result = request.env['user.sync.state'].sudo().update_sync_state(
+                user_id=user_id,
+                device_id=device_id,
+                last_event_id=last_event_id,
+                events_synced=events_synced
+            )
+
+            if result:
+                return self._make_response({
+                    'success': True,
+                    'sync_state': result,
+                    'timestamp': datetime.now().isoformat(),
+                })
+            else:
+                return self._error_response("Sync state not found", status=404)
+
+        except ValueError as e:
+            return self._error_response(f"Invalid parameter: {str(e)}", status=400)
+        except Exception as e:
+            _logger.error(f"Update sync state failed: {e}", exc_info=True)
+            return self._error_response(f"Internal server error: {str(e)}", status=500)
+
+    @http.route('/api/webhooks/sync-state/stats', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
+    def get_sync_statistics(self, **kwargs):
+        """
+        Get sync statistics for a user
+
+        Query Parameters:
+            user_id (int): User ID (required)
+            device_id (str): Device ID (optional)
+            app_type (str): App type (optional)
+
+        Returns:
+            JSON response with sync statistics
+        """
+        try:
+            # Authenticate
+            user = self._get_auth_user()
+            if not user:
+                return self._error_response("Authentication required", status=401)
+
+            # Get parameters
+            user_id = int(kwargs.get('user_id', 0))
+            device_id = kwargs.get('device_id', '').strip()
+            app_type = kwargs.get('app_type', '').strip()
+
+            if not user_id:
+                return self._error_response("user_id is required", status=400)
+
+            _logger.info(f"Get sync statistics: user_id={user_id}, device_id={device_id}, app_type={app_type}")
+
+            # Get statistics
+            stats = request.env['user.sync.state'].sudo().get_sync_statistics(
+                user_id=user_id,
+                device_id=device_id if device_id else None,
+                app_type=app_type if app_type else None
+            )
+
+            return self._make_response({
+                'success': True,
+                'stats': stats,
+                'timestamp': datetime.now().isoformat(),
+            })
+
+        except ValueError as e:
+            return self._error_response(f"Invalid parameter: {str(e)}", status=400)
+        except Exception as e:
+            _logger.error(f"Get sync statistics failed: {e}", exc_info=True)
+            return self._error_response(f"Internal server error: {str(e)}", status=500)
