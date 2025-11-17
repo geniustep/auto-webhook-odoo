@@ -59,8 +59,9 @@
 ### 🔄 Hybrid System (Pull + Push)
 - **Pull-based (للأحداث العادية)**: جميع الأحداث مخزنة في `update.webhook` - BridgeCore يسحب الأحداث عبر `/api/webhooks/pull`
 - **Push-based (للأحداث الحرجة)**: الأحداث الحرجة (priority=high + instant_send=True) تُرسل فوراً إلى BridgeCore
-- **موثوقية عالية**: Pull-based يضمن عدم فقدان الأحداث
-- **Real-time للأحداث المهمة**: Push-based للأحداث الحرجة فقط
+- **Dual-Write System**: الأحداث الحرجة تُرسل Push فوراً + تُخزن في `update.webhook` للـ Pull (backup)
+- **موثوقية عالية**: Pull-based يضمن عدم فقدان الأحداث حتى لو فشل Push
+- **Real-time للأحداث المهمة**: Push-based للأحداث الحرجة فقط (Sale Orders, Purchase Orders, Invoices, Payments)
 - **أداء محسّن**: تقليل الحمل على النظام بإرسال Push للأحداث الحرجة فقط
 
 ### 🔄 Dual-Write System
@@ -152,20 +153,26 @@ sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 od
 - URL: `https://bridgecore.geniura.com/api/v1/webhooks/receive`
 - الحالة: مفعّل تلقائياً (Enabled = True)
 
-✅ **9 Webhook Configs مفعّلة تلقائياً**:
-- Sale Orders (High Priority)
-- Purchase Orders (High Priority)
-- Invoices/Account Moves (High Priority)
-- Account Payments (High Priority)
-- CRM Leads (High Priority)
-- Stock Picking (Medium Priority)
-- Stock Moves (Medium Priority)
-- Customers & Partners (Medium Priority)
-- Products (Low Priority)
+✅ **8 Webhook Configs مفعّلة تلقائياً**:
+
+**Configs حرجة (Priority=High + Instant Send=True)**:
+- Sale Orders (High Priority, Instant Send)
+- Purchase Orders (High Priority, Instant Send)
+- Invoices/Account Moves (High Priority, Instant Send)
+- Account Payments (High Priority, Instant Send)
+
+**Configs عادية (Priority=Medium/Low + Instant Send=False)**:
+- Stock Picking (Medium Priority, Pull-only)
+- Stock Moves (Medium Priority, Pull-only)
+- Customers & Partners (Medium Priority, Pull-only)
+- Products (Low Priority, Pull-only)
 
 ✅ **جميع Configs مربوطة بـ Subscriber تلقائياً**
 
-**النتيجة**: Webhook tracking يعمل مباشرة بعد التثبيت بدون إعداد يدوي!
+**النتيجة**: 
+- **Pull-based**: جميع الأحداث مخزنة في `update.webhook` (BridgeCore يسحبها)
+- **Push-based**: الأحداث الحرجة فقط (priority=high + instant_send=True) تُرسل فوراً
+- Webhook tracking يعمل مباشرة بعد التثبيت بدون إعداد يدوي!
 
 ---
 
@@ -202,19 +209,30 @@ sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 od
 
 ### 📍 أين يتم الإرسال؟
 
-#### Pull-based (للأحداث العادية):
+#### 🔄 Hybrid System (Pull + Push)
+
+**Pull-based (للأحداث العادية)**:
 - **التخزين**: جميع الأحداث مخزنة في `update.webhook`
 - **السحب**: BridgeCore يسحب من `/api/webhooks/pull`
 - **النماذج**: جميع النماذج (medium/low priority) + backup للأحداث الحرجة
+- **الموثوقية**: ✅ عالية - لا فقدان للأحداث
+- **الأداء**: ⚡ ممتاز - لا حمل إضافي على النظام
 
-#### Push-based (للأحداث الحرجة فقط):
+**Push-based (للأحداث الحرجة فقط)**:
 - **الإرسال إلى**: `endpoint_url` الخاص بـ **Subscriber**
 - **الافتراضي**: `https://bridgecore.geniura.com/api/v1/webhooks/receive`
 - **الطريقة**: HTTP POST request فوري
 - **متى**: فوراً للأحداث الحرجة (priority=high + instant_send=True)
 - **النماذج**: Sale Orders, Purchase Orders, Invoices, Account Payments
+- **Real-time**: ✅ فوري للأحداث المهمة
 
-**ملاحظة**: الأحداث الحرجة تُرسل Push فوراً + تُخزن في `update.webhook` للـ Pull (Dual-Write)
+**Dual-Write System**:
+- **الأحداث الحرجة**: 
+  - ✅ Push فوري إلى BridgeCore (real-time)
+  - ✅ تخزين في `update.webhook` (backup للـ Pull)
+- **الأحداث العادية**: 
+  - ✅ تخزين في `update.webhook` فقط (Pull-based)
+- **النتيجة**: موثوقية عالية + real-time للأحداث المهمة
 
 ---
 
@@ -238,6 +256,19 @@ sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 od
 - تعديل الأولويات (High/Medium/Low)
 - تغيير أنواع الأحداث (Create/Write/Unlink)
 - إضافة Subscribers إضافية
+- تفعيل/تعطيل Instant Send
+
+#### ⚡ Instant Send Configuration
+
+**للأحداث الحرجة (Priority=High)**:
+- `instant_send=True`: إرسال فوري (Push-based)
+- النماذج: Sale Orders, Purchase Orders, Invoices, Account Payments
+
+**للأحداث العادية (Priority=Medium/Low)**:
+- `instant_send=False`: Pull-only (لا Push)
+- النماذج: Stock Picking, Stock Moves, Partners, Products
+
+**ملاحظة**: تغيير `instant_send` يؤثر على طريقة الإرسال فقط. جميع الأحداث تُخزن في `update.webhook` للـ Pull.
 
 ### 3. عرض الأحداث
 
@@ -248,6 +279,75 @@ sudo -u odoo18 bash -c "cd /opt/odoo18 && source venv/bin/activate && python3 od
 - الأحداث المعلقة
 - الأحداث الفاشلة
 - الأحداث في Dead Letter Queue
+
+---
+
+## ⚡ Instant Send (الإرسال الفوري)
+
+### ما هو Instant Send؟
+
+**Instant Send** هو خيار في Webhook Config يحدد ما إذا كان يجب إرسال الأحداث فوراً (Push) أم فقط تخزينها للـ Pull.
+
+### كيف يعمل؟
+
+#### للأحداث الحرجة (Priority=High + Instant Send=True):
+```
+Odoo Event → update.webhook (Storage) ✅
+           → webhook.event (Push) ✅
+           → Instant HTTP POST → BridgeCore ✅
+```
+- **الإرسال**: فوري (Push-based)
+- **التخزين**: في `update.webhook` (backup للـ Pull)
+- **الاستخدام**: للأحداث المهمة التي تحتاج real-time
+
+#### للأحداث العادية (Priority=Medium/Low + Instant Send=False):
+```
+Odoo Event → update.webhook (Storage) ✅
+           → (لا Push - Pull-only)
+```
+- **الإرسال**: لا يوجد Push
+- **التخزين**: في `update.webhook` فقط
+- **الاستخدام**: للأحداث العادية (BridgeCore يسحبها)
+
+### Configs مع Instant Send=True (Push-based):
+
+| النموذج | Priority | Instant Send | الوصف |
+|---------|----------|--------------|-------|
+| `sale.order` | High | ✅ True | طلبات المبيعات - إرسال فوري |
+| `purchase.order` | High | ✅ True | طلبات الشراء - إرسال فوري |
+| `account.move` | High | ✅ True | الفواتير - إرسال فوري |
+| `account.payment` | High | ✅ True | المدفوعات - إرسال فوري |
+
+### Configs مع Instant Send=False (Pull-only):
+
+| النموذج | Priority | Instant Send | الوصف |
+|---------|----------|--------------|-------|
+| `stock.picking` | Medium | ❌ False | عمليات النقل - Pull-only |
+| `stock.move` | Medium | ❌ False | حركات المخزون - Pull-only |
+| `res.partner` | Medium | ❌ False | العملاء - Pull-only |
+| `product.template` | Low | ❌ False | المنتجات - Pull-only |
+
+### Dual-Write Strategy:
+
+**الأحداث الحرجة (instant_send=True)**:
+1. ✅ تُخزن في `update.webhook` (للـ Pull)
+2. ✅ تُرسل Push فوراً إلى BridgeCore
+3. ✅ موثوقية عالية (Pull backup)
+
+**الأحداث العادية (instant_send=False)**:
+1. ✅ تُخزن في `update.webhook` فقط
+2. ❌ لا Push (Pull-only)
+3. ✅ BridgeCore يسحبها عند الحاجة
+
+### تغيير Instant Send:
+
+**من واجهة Odoo**:
+1. اذهب إلى: `Webhooks → Configuration → Webhook Configs`
+2. اختر Config
+3. غيّر `Instant Send` حسب الحاجة
+4. احفظ
+
+**ملاحظة**: تغيير `instant_send` يؤثر على الأحداث الجديدة فقط. الأحداث القديمة لا تتأثر.
 
 ---
 
@@ -806,9 +906,14 @@ success_rate = (sent / total) * 100 if total > 0 else 0
 ### الإصدار 2.1.0 (2025-11-16)
 
 **ميزات جديدة**:
+- ✨ **Hybrid System (Pull + Push)**: نظام هجين يجمع بين Pull-based و Push-based
+  - Pull-based: جميع الأحداث مخزنة في `update.webhook` (BridgeCore يسحبها)
+  - Push-based: الأحداث الحرجة فقط (priority=high + instant_send=True) تُرسل فوراً
+  - Dual-Write: الأحداث الحرجة تُرسل Push + تُخزن في `update.webhook` (backup)
 - ✨ إضافة `user.sync.state` model لتتبع حالة المزامنة للمستخدمين/الأجهزة
 - ✨ Dual-Write System: كتابة في `webhook.event` و `update.webhook` معاً
-- ✨ Pull-based API: BridgeCore يمكنه سحب الأحداث عبر API
+- ✨ Pull-based API: BridgeCore يمكنه سحب الأحداث عبر `/api/webhooks/pull`
+- ✨ Instant Send: إرسال فوري للأحداث الحرجة فقط
 - ✨ تحسينات في webhook processing: استخدام sudo() و savepoints
 - ✨ معالجة آمنة للأخطاء: لا تأثير على العمليات الرئيسية
 
@@ -817,6 +922,8 @@ success_rate = (sent / total) * 100 if total > 0 else 0
 - 🔒 تحسين الأمان: استخدام sudo() لتجنب مشاكل الصلاحيات
 - 🛡️ معالجة أفضل للأخطاء: تخطي الحقول المحسوبة والثنائية
 - 📊 إضافة 3 نماذج جديدة: stock.move, account.payment, crm.lead
+- 🔄 BridgeCore Integration: تحديث URL إلى `https://bridgecore.geniura.com/api/v1/webhooks/receive`
+- 📝 تحسين رسائل الخطأ في test_connection مع تفاصيل status codes
 
 **إصلاحات**:
 - 🐛 إصلاح مشكلة الصلاحيات في webhook processing
