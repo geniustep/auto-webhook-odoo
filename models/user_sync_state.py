@@ -205,30 +205,55 @@ class UserSyncState(models.Model):
             'is_active': new_state.is_active,
         }
 
-    def update_sync_state(self, last_event_id, event_count=0):
+    @api.model
+    def update_sync_state(self, user_id, device_id, last_event_id, events_synced=0):
         """
         Update sync state after successful sync
 
         Args:
+            user_id (int): User ID
+            device_id (str): Device unique identifier
             last_event_id (int): ID of last event synced
-            event_count (int): Number of events in this sync
-        """
-        self.ensure_one()
+            events_synced (int): Number of events synced
 
-        self.write({
+        Returns:
+            dict: Updated sync state data or False if not found
+        """
+        state = self.search([
+            ('user_id', '=', user_id),
+            ('device_id', '=', device_id)
+        ], limit=1)
+
+        if not state:
+            _logger.warning(f"Sync state not found for user {user_id}, device {device_id}")
+            return False
+
+        state.write({
             'last_event_id': last_event_id,
             'last_sync_time': fields.Datetime.now(),
-            'sync_count': self.sync_count + 1,
-            'last_event_count': event_count,
-            'total_events_synced': self.total_events_synced + event_count,
+            'sync_count': state.sync_count + 1,
+            'last_event_count': events_synced,
+            'total_events_synced': state.total_events_synced + events_synced,
         })
 
         _logger.info(
-            f"Updated sync state {self.id}: "
+            f"Updated sync state {state.id}: "
             f"last_event_id={last_event_id}, "
-            f"event_count={event_count}, "
-            f"sync_count={self.sync_count}"
+            f"events_synced={events_synced}, "
+            f"sync_count={state.sync_count}"
         )
+
+        return {
+            'id': state.id,
+            'user_id': state.user_id.id,
+            'device_id': state.device_id,
+            'app_type': state.app_type,
+            'last_event_id': state.last_event_id,
+            'last_sync_time': state.last_sync_time.isoformat() if state.last_sync_time else None,
+            'sync_count': state.sync_count,
+            'total_events_synced': state.total_events_synced,
+            'is_active': state.is_active,
+        }
 
     def reset_sync_state(self):
         """Reset sync state to force full sync"""
@@ -281,12 +306,14 @@ class UserSyncState(models.Model):
         return count
 
     @api.model
-    def get_sync_statistics(self, user_id=None):
+    def get_sync_statistics(self, user_id=None, device_id=None, app_type=None):
         """
         Get sync statistics
 
         Args:
             user_id (int, optional): Filter by user ID
+            device_id (str, optional): Filter by device ID
+            app_type (str, optional): Filter by app type
 
         Returns:
             dict: Statistics data
@@ -294,15 +321,35 @@ class UserSyncState(models.Model):
         domain = []
         if user_id:
             domain.append(('user_id', '=', user_id))
+        if device_id:
+            domain.append(('device_id', '=', device_id))
+        if app_type:
+            domain.append(('app_type', '=', app_type))
 
         states = self.search(domain)
 
+        # Get all devices for user if user_id is provided
+        devices = []
+        if user_id:
+            user_states = self.search([('user_id', '=', user_id)])
+            for state in user_states:
+                devices.append({
+                    'device_id': state.device_id,
+                    'app_type': state.app_type,
+                    'last_sync_time': state.last_sync_time.isoformat() if state.last_sync_time else None,
+                    'sync_count': state.sync_count,
+                    'total_events_synced': state.total_events_synced,
+                    'is_active': state.is_active,
+                })
+
         return {
-            'total_states': len(states),
-            'active_states': len(states.filtered('is_active')),
-            'inactive_states': len(states.filtered(lambda s: not s.is_active)),
-            'total_syncs': sum(states.mapped('sync_count')),
-            'total_events_synced': sum(states.mapped('total_events_synced')),
+            'user_id': user_id,
+            'total_devices': len(user_states) if user_id else len(states),
+            'active_devices': len(user_states.filtered('is_active')) if user_id else len(states.filtered('is_active')),
+            'total_syncs': sum(user_states.mapped('sync_count')) if user_id else sum(states.mapped('sync_count')),
+            'total_events_synced': sum(user_states.mapped('total_events_synced')) if user_id else sum(states.mapped('total_events_synced')),
+            'last_sync_time': max(user_states.mapped('last_sync_time') or [None]) if user_id else max(states.mapped('last_sync_time') or [None]),
+            'devices': devices if user_id else [],
             'by_app_type': {
                 app_type: len(states.filtered(lambda s: s.app_type == app_type))
                 for app_type, _ in self._fields['app_type'].selection
