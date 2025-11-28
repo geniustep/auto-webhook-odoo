@@ -5,7 +5,6 @@
     <record id="webhook_event_view_tree" model="ir.ui.view">
         <field name="name">webhook.event.tree</field>
         <field name="model">webhook.event</field>
-        <field name="type">list</field>
         <field name="arch" type="xml">
             <list string="Webhook Events">
                 <field name="timestamp"/>
@@ -141,5 +140,21 @@
             </p>
         </field>
     </record>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <!-- Menu Items -->
+    <!-- ════════════════════════════════════════════════════════════ -->
+
+    <menuitem id="webhook_dashboard_menu"
+              name="Dashboard"
+              parent="webhook_main_menu"
+              action="webhook_event_action"
+              sequence="1"/>
+
+    <menuitem id="webhook_event_all_menu"
+              name="All Events"
+              parent="webhook_events_menu"
+              action="webhook_event_action"
+              sequence="1"/>
 
 </odoo>

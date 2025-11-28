@@ -57,6 +57,9 @@ For documentation and support, visit: https://www.geniustep.com
     },
 
     'data': [
+        # Models (must be loaded first to create ir.model records)
+        'data/ir_model_data.xml',
+        
         # Security
         'security/ir.model.access.csv',
 
@@ -67,11 +70,11 @@ For documentation and support, visit: https://www.geniustep.com
         'data/webhook_rule_data.xml',  # Default webhook rules (config-driven)
 
         # Views
+        'views/webhook_menuitem.xml',  # Main menu structure (loaded first)
         'views/webhook_event_views.xml',
         'views/webhook_config_views.xml',
         'views/webhook_subscriber_views.xml',
         'views/webhook_rule_views.xml',  # Webhook rules configuration UI
-        'views/webhook_menuitem.xml',
         'views/update_webhook_views.xml',  # Update webhook views
         'views/user_sync_state_views.xml',  # User sync state views
     ],

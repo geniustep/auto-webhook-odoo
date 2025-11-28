@@ -440,6 +440,14 @@ class WebhookRule(models.Model):
         self.ensure_one()
         
         try:
+            # Ensure record has an ID
+            if not record or not record.id:
+                _logger.warning(
+                    f'Webhook trigger skipped for rule "{self.name}": '
+                    f'Record has no ID (model: {record._name if record else "Unknown"})'
+                )
+                return False
+            
             # Update last trigger time
             self.sudo().write({'last_trigger': fields.Datetime.now()})
             
@@ -565,6 +573,14 @@ class WebhookRule(models.Model):
         """Send instant webhook (for high priority events)"""
         self.ensure_one()
         
+        # Ensure record has an ID
+        if not record or not record.id:
+            _logger.warning(
+                f'Instant send skipped: Record has no ID '
+                f'(model: {record._name if record else "Unknown"})'
+            )
+            return
+        
         if not self.subscriber_ids:
             return
         
@@ -653,7 +669,7 @@ class WebhookRule(models.Model):
             'type': 'ir.actions.act_window',
             'name': _('Webhook Events'),
             'res_model': 'update.webhook',
-            'view_mode': 'tree,form',
+            'view_mode': 'list,form',
             'domain': [
                 ('model', '=', self.model_name),
                 ('event', '=', self.operation),

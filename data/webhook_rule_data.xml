@@ -168,7 +168,7 @@
             <field name="priority">medium</field>
             <field name="category">business</field>
             <field name="instant_send">False</field>
-            <field name="tracked_fields">state,quantity,quantity_done</field>
+            <field name="tracked_fields">state,quantity</field>
             <field name="active">True</field>
             <field name="description">Track stock move updates</field>
         </record>

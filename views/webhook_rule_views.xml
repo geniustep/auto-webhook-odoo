@@ -236,15 +236,14 @@
     </record>
 
     <!-- ════════════════════════════════════════════════════════════ -->
-    <!-- Menu Item -->
+    <!-- Menu Items -->
     <!-- ════════════════════════════════════════════════════════════ -->
-    
-    <menuitem
-        id="menu_webhook_rule"
-        name="Rules"
-        parent="menu_webhook_config"
-        action="action_webhook_rule"
-        sequence="5"/>
+
+    <menuitem id="menu_webhook_rule"
+              name="Rules"
+              parent="webhook_config_menu"
+              action="action_webhook_rule"
+              sequence="5"/>
 
 </odoo>
 

@@ -50,11 +50,18 @@ class BaseWebhookHook(models.AbstractModel):
         # Execute original create
         records = super().create(vals_list)
         
-        # Trigger webhook (fail-safe)
-        try:
-            self._webhook_trigger_create(records)
-        except Exception as e:
-            _logger.error(f'Webhook trigger failed for create: {e}')
+        # Trigger webhook AFTER transaction using @after_commit
+        # This ensures records are fully saved with valid IDs
+        if records and not self.env.context.get('webhook_disabled'):
+            # Use after_commit to ensure IDs are assigned
+            @self.env.cr.postcommit.add
+            def trigger_webhooks():
+                try:
+                    # Ensure records still exist and have IDs
+                    if records.exists():
+                        self._webhook_trigger_create(records)
+                except Exception as e:
+                    _logger.error(f'Webhook trigger failed for create: {e}', exc_info=True)
         
         return records
 
@@ -121,6 +128,14 @@ class BaseWebhookHook(models.AbstractModel):
         
         # Process each record
         for record in records:
+            # Ensure record has valid ID
+            if not record.id or isinstance(record.id, models.NewId):
+                _logger.warning(
+                    f'Skipping webhook for {record._name}: '
+                    f'Record has no valid ID (id={record.id})'
+                )
+                continue
+                
             for rule in rules:
                 try:
                     # Check domain filter

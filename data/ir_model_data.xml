@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        
+        <!-- 
+        ════════════════════════════════════════════════════════════════════════
+        Model Definitions
+        
+        These records ensure that all custom models are properly registered
+        in ir.model before the access rights CSV is loaded.
+        
+        This prevents "model not found" errors during module installation.
+        ════════════════════════════════════════════════════════════════════════
+        -->
+
+        <!-- Webhook Event -->
+        <record id="model_webhook_event" model="ir.model">
+            <field name="model">webhook.event</field>
+            <field name="name">Webhook Event</field>
+            <field name="info">Webhook events for tracking and delivery</field>
+        </record>
+
+        <!-- Webhook Config -->
+        <record id="model_webhook_config" model="ir.model">
+            <field name="model">webhook.config</field>
+            <field name="name">Webhook Configuration</field>
+            <field name="info">Configuration for webhook tracking on models</field>
+        </record>
+
+        <!-- Webhook Subscriber -->
+        <record id="model_webhook_subscriber" model="ir.model">
+            <field name="model">webhook.subscriber</field>
+            <field name="name">Webhook Subscriber</field>
+            <field name="info">Webhook endpoint subscribers</field>
+        </record>
+
+        <!-- Webhook Template -->
+        <record id="model_webhook_template" model="ir.model">
+            <field name="model">webhook.template</field>
+            <field name="name">Webhook Template</field>
+            <field name="info">Custom payload templates for webhooks</field>
+        </record>
+
+        <!-- Webhook Retry -->
+        <record id="model_webhook_retry" model="ir.model">
+            <field name="model">webhook.retry</field>
+            <field name="name">Webhook Retry</field>
+            <field name="info">Failed webhook events for retry</field>
+        </record>
+
+        <!-- Webhook Audit -->
+        <record id="model_webhook_audit" model="ir.model">
+            <field name="model">webhook.audit</field>
+            <field name="name">Webhook Audit</field>
+            <field name="info">Audit log for webhook activities</field>
+        </record>
+
+        <!-- Update Webhook (Pull-based event storage) -->
+        <record id="model_update_webhook" model="ir.model">
+            <field name="model">update.webhook</field>
+            <field name="name">Update Webhook</field>
+            <field name="info">Pull-based webhook events for BridgeCore Smart Sync</field>
+        </record>
+
+        <!-- User Sync State -->
+        <record id="model_user_sync_state" model="ir.model">
+            <field name="model">user.sync.state</field>
+            <field name="name">User Sync State</field>
+            <field name="info">Track sync state per user for BridgeCore Smart Sync</field>
+        </record>
+
+        <!-- Webhook Rule (Config-driven tracking) -->
+        <record id="model_webhook_rule" model="ir.model">
+            <field name="model">webhook.rule</field>
+            <field name="name">Webhook Rule</field>
+            <field name="info">Config-driven webhook tracking rules</field>
+        </record>
+
+    </data>
+</odoo>
+

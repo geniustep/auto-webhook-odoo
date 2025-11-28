@@ -5,7 +5,6 @@
     <record id="webhook_subscriber_view_tree" model="ir.ui.view">
         <field name="name">webhook.subscriber.tree</field>
         <field name="model">webhook.subscriber</field>
-        <field name="type">list</field>
         <field name="arch" type="xml">
             <list string="Webhook Subscribers">
                 <field name="name"/>
@@ -105,5 +104,15 @@
             </p>
         </field>
     </record>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <!-- Menu Items -->
+    <!-- ════════════════════════════════════════════════════════════ -->
+
+    <menuitem id="webhook_subscriber_menu"
+              name="Subscribers"
+              parent="webhook_config_menu"
+              action="webhook_subscriber_action"
+              sequence="2"/>
 
 </odoo>

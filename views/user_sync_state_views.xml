@@ -4,7 +4,6 @@
     <record id="view_user_sync_state_list" model="ir.ui.view">
         <field name="name">user.sync.state.list</field>
         <field name="model">user.sync.state</field>
-        <field name="type">list</field>
         <field name="arch" type="xml">
             <list string="User Sync States" default_order="last_sync_time desc">
                 <field name="user_id"/>

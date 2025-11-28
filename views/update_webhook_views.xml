@@ -5,7 +5,6 @@
     <record id="view_update_webhook_tree" model="ir.ui.view">
         <field name="name">update.webhook.tree</field>
         <field name="model">update.webhook</field>
-        <field name="type">list</field>
         <field name="arch" type="xml">
             <list string="Update Webhook Events"
                   decoration-success="is_processed == True"

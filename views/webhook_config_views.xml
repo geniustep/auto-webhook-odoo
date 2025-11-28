@@ -5,7 +5,6 @@
     <record id="webhook_config_view_tree" model="ir.ui.view">
         <field name="name">webhook.config.tree</field>
         <field name="model">webhook.config</field>
-        <field name="type">list</field>
         <field name="arch" type="xml">
             <list string="Webhook Configurations">
                 <field name="name"/>
@@ -103,5 +102,15 @@
             </p>
         </field>
     </record>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <!-- Menu Items -->
+    <!-- ════════════════════════════════════════════════════════════ -->
+
+    <menuitem id="webhook_config_settings_menu"
+              name="Webhook Configs"
+              parent="webhook_config_menu"
+              action="webhook_config_action"
+              sequence="1"/>
 
 </odoo>

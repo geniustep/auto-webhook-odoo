@@ -381,7 +381,7 @@ class WebhookConfig(models.Model):
             'name': _('Webhook Events'),
             'type': 'ir.actions.act_window',
             'res_model': 'webhook.event',
-            'view_mode': 'tree,form',
+            'view_mode': 'list,form',
             'domain': [('config_id', '=', self.id)],
             'context': {'default_config_id': self.id},
         }
