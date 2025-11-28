@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Auto Webhook - Enterprise Grade',
-    'version': '2.0.0',
+    'version': '3.0.0',
     'author': 'Odoo Zak, Geniustep',
     'category': 'Tools',
     'sequence': 10,
@@ -63,15 +63,17 @@ For documentation and support, visit: https://www.geniustep.com
         # Data
         'data/webhook_cron.xml',
         'data/webhook_data.xml',
-        'data/update_webhook_cron.xml',  # New: Cleanup cron for update.webhook
+        'data/update_webhook_cron.xml',  # Cleanup cron for update.webhook
+        'data/webhook_rule_data.xml',  # Default webhook rules (config-driven)
 
         # Views
         'views/webhook_event_views.xml',
         'views/webhook_config_views.xml',
         'views/webhook_subscriber_views.xml',
+        'views/webhook_rule_views.xml',  # Webhook rules configuration UI
         'views/webhook_menuitem.xml',
-        'views/update_webhook_views.xml',  # New: Update webhook views
-        'views/user_sync_state_views.xml',  # New: User sync state views
+        'views/update_webhook_views.xml',  # Update webhook views
+        'views/user_sync_state_views.xml',  # User sync state views
     ],
 
     'installable': True,
@@ -81,5 +83,5 @@ For documentation and support, visit: https://www.geniustep.com
     'images': ['static/description/banner.png'],
 
     'price': 0.00,
-    'currency': 'USD',
+    
 }

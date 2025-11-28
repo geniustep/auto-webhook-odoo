@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        
+        <!--
+        ════════════════════════════════════════════════════════════════════════
+        Default Webhook Rules
+        
+        These rules are created automatically when the module is installed.
+        They cover the 13 main business models that were previously hardcoded.
+        
+        Users can modify these rules from the UI or add new ones.
+        ════════════════════════════════════════════════════════════════════════
+        -->
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- CRITICAL MODELS (High Priority + Instant Send) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+
+        <!-- Sale Order - Create -->
+        <record id="rule_sale_order_create" model="webhook.rule">
+            <field name="name">Sale Order - Create</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="operation">create</field>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send">True</field>
+            <field name="active">True</field>
+            <field name="description">Track new sale orders</field>
+        </record>
+
+        <!-- Sale Order - Write -->
+        <record id="rule_sale_order_write" model="webhook.rule">
+            <field name="name">Sale Order - Update</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="operation">write</field>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send">True</field>
+            <field name="tracked_fields">state,amount_total,partner_id,date_order</field>
+            <field name="active">True</field>
+            <field name="description">Track sale order updates (state, amount, partner, date)</field>
+        </record>
+
+        <!-- Sale Order - Unlink -->
+        <record id="rule_sale_order_unlink" model="webhook.rule">
+            <field name="name">Sale Order - Delete</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="operation">unlink</field>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send">True</field>
+            <field name="active">True</field>
+            <field name="description">Track sale order deletions</field>
+        </record>
+
+        <!-- Purchase Order - Create -->
+        <record id="rule_purchase_order_create" model="webhook.rule">
+            <field name="name">Purchase Order - Create</field>
+            <field name="model_id" ref="purchase.model_purchase_order"/>
+            <field name="operation">create</field>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send">True</field>
+            <field name="active">True</field>
+            <field name="description">Track new purchase orders</field>
+        </record>
+
+        <!-- Purchase Order - Write -->
+        <record id="rule_purchase_order_write" model="webhook.rule">
+            <field name="name">Purchase Order - Update</field>
+            <field name="model_id" ref="purchase.model_purchase_order"/>
+            <field name="operation">write</field>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send">True</field>
+            <field name="tracked_fields">state,amount_total,partner_id,date_order</field>
+            <field name="active">True</field>
+            <field name="description">Track purchase order updates</field>
+        </record>
+
+        <!-- Account Move (Invoice) - Create -->
+        <record id="rule_account_move_create" model="webhook.rule">
+            <field name="name">Invoice - Create</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="operation">create</field>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send">True</field>
+            <field name="domain">[('move_type', 'in', ['out_invoice', 'out_refund', 'in_invoice', 'in_refund'])]</field>
+            <field name="active">True</field>
+            <field name="description">Track new invoices</field>
+        </record>
+
+        <!-- Account Move (Invoice) - Write -->
+        <record id="rule_account_move_write" model="webhook.rule">
+            <field name="name">Invoice - Update</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="operation">write</field>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send">True</field>
+            <field name="tracked_fields">state,payment_state,amount_total,amount_residual</field>
+            <field name="domain">[('move_type', 'in', ['out_invoice', 'out_refund', 'in_invoice', 'in_refund'])]</field>
+            <field name="active">True</field>
+            <field name="description">Track invoice updates (state, payment, amount)</field>
+        </record>
+
+        <!-- Account Payment - Create -->
+        <record id="rule_account_payment_create" model="webhook.rule">
+            <field name="name">Payment - Create</field>
+            <field name="model_id" ref="account.model_account_payment"/>
+            <field name="operation">create</field>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send">True</field>
+            <field name="active">True</field>
+            <field name="description">Track new payments</field>
+        </record>
+
+        <!-- Account Payment - Write -->
+        <record id="rule_account_payment_write" model="webhook.rule">
+            <field name="name">Payment - Update</field>
+            <field name="model_id" ref="account.model_account_payment"/>
+            <field name="operation">write</field>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send">True</field>
+            <field name="tracked_fields">state,amount,payment_type</field>
+            <field name="active">True</field>
+            <field name="description">Track payment updates</field>
+        </record>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- MEDIUM PRIORITY MODELS (Pull-based) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+
+        <!-- Stock Picking - Create -->
+        <record id="rule_stock_picking_create" model="webhook.rule">
+            <field name="name">Stock Picking - Create</field>
+            <field name="model_id" ref="stock.model_stock_picking"/>
+            <field name="operation">create</field>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="active">True</field>
+            <field name="description">Track new stock pickings</field>
+        </record>
+
+        <!-- Stock Picking - Write -->
+        <record id="rule_stock_picking_write" model="webhook.rule">
+            <field name="name">Stock Picking - Update</field>
+            <field name="model_id" ref="stock.model_stock_picking"/>
+            <field name="operation">write</field>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="tracked_fields">state,scheduled_date,date_done</field>
+            <field name="active">True</field>
+            <field name="description">Track stock picking updates</field>
+        </record>
+
+        <!-- Stock Move - Write -->
+        <record id="rule_stock_move_write" model="webhook.rule">
+            <field name="name">Stock Move - Update</field>
+            <field name="model_id" ref="stock.model_stock_move"/>
+            <field name="operation">write</field>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="tracked_fields">state,quantity,quantity_done</field>
+            <field name="active">True</field>
+            <field name="description">Track stock move updates</field>
+        </record>
+
+        <!-- Partner - Create -->
+        <record id="rule_res_partner_create" model="webhook.rule">
+            <field name="name">Partner - Create</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="operation">create</field>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="active">True</field>
+            <field name="description">Track new partners/customers</field>
+        </record>
+
+        <!-- Partner - Write -->
+        <record id="rule_res_partner_write" model="webhook.rule">
+            <field name="name">Partner - Update</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="operation">write</field>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="tracked_fields">name,email,phone,street,city,country_id,active</field>
+            <field name="active">True</field>
+            <field name="description">Track partner updates</field>
+        </record>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- LOW PRIORITY MODELS (Pull-based) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+
+        <!-- Product Template - Create -->
+        <record id="rule_product_template_create" model="webhook.rule">
+            <field name="name">Product - Create</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="operation">create</field>
+            <field name="priority">low</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="active">True</field>
+            <field name="description">Track new products</field>
+        </record>
+
+        <!-- Product Template - Write -->
+        <record id="rule_product_template_write" model="webhook.rule">
+            <field name="name">Product - Update</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="operation">write</field>
+            <field name="priority">low</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="tracked_fields">name,list_price,standard_price,qty_available,active</field>
+            <field name="active">True</field>
+            <field name="description">Track product updates</field>
+        </record>
+
+        <!-- Product Category - Write -->
+        <record id="rule_product_category_write" model="webhook.rule">
+            <field name="name">Product Category - Update</field>
+            <field name="model_id" ref="product.model_product_category"/>
+            <field name="operation">write</field>
+            <field name="priority">low</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="active">True</field>
+            <field name="description">Track product category updates</field>
+        </record>
+
+        <!-- HR Employee - Write -->
+        <record id="rule_hr_employee_write" model="webhook.rule">
+            <field name="name">Employee - Update</field>
+            <field name="model_id" ref="hr.model_hr_employee"/>
+            <field name="operation">write</field>
+            <field name="priority">low</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="tracked_fields">name,work_email,department_id,job_id,active</field>
+            <field name="active">True</field>
+            <field name="description">Track employee updates</field>
+        </record>
+
+        <!-- HR Expense - Create -->
+        <record id="rule_hr_expense_create" model="webhook.rule">
+            <field name="name">Expense - Create</field>
+            <field name="model_id" ref="hr_expense.model_hr_expense"/>
+            <field name="operation">create</field>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="active">True</field>
+            <field name="description">Track new expenses</field>
+        </record>
+
+        <!-- HR Expense - Write -->
+        <record id="rule_hr_expense_write" model="webhook.rule">
+            <field name="name">Expense - Update</field>
+            <field name="model_id" ref="hr_expense.model_hr_expense"/>
+            <field name="operation">write</field>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="tracked_fields">state,total_amount,payment_mode</field>
+            <field name="active">True</field>
+            <field name="description">Track expense updates</field>
+        </record>
+
+        <!-- CRM Lead - Create (if crm module installed) -->
+        <!-- Note: This will only work if crm module is installed -->
+        <!--
+        <record id="rule_crm_lead_create" model="webhook.rule">
+            <field name="name">Lead/Opportunity - Create</field>
+            <field name="model_id" ref="crm.model_crm_lead"/>
+            <field name="operation">create</field>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send">False</field>
+            <field name="active">True</field>
+            <field name="description">Track new leads and opportunities</field>
+        </record>
+        -->
+
+    </data>
+</odoo>
+

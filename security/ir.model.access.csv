@@ -16,3 +16,5 @@ access_update_webhook_manager,update.webhook.manager,model_update_webhook,base.g
 access_update_webhook_public,update.webhook.public,model_update_webhook,base.group_public,1,0,0,0
 access_user_sync_state_user,user.sync.state.user,model_user_sync_state,base.group_user,1,0,0,0
 access_user_sync_state_manager,user.sync.state.manager,model_user_sync_state,base.group_system,1,1,1,1
+access_webhook_rule_user,webhook.rule.user,model_webhook_rule,base.group_user,1,0,0,0
+access_webhook_rule_manager,webhook.rule.manager,model_webhook_rule,base.group_system,1,1,1,1
