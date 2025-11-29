@@ -454,25 +454,40 @@ class WebhookRule(models.Model):
             # Prepare payload
             payload_data = self._prepare_payload(record, changed_vals)
             
-            # Create event in update.webhook
-            event = self.env['update.webhook'].sudo().create({
-                'model': record._name,
-                'record_id': record.id,
-                'event': operation,
-                'payload': payload_data,
-                'priority': self.priority,
-                'category': self.category,
-                'user_id': self.env.user.id,
-            })
+            # Get webhook config for additional metadata
+            config = self.env['webhook.config'].sudo().search([
+                ('model_name', '=', record._name)
+            ], limit=1)
+            
+            # Create event in update.webhook using the optimized create_event method
+            event = self.env['update.webhook'].sudo().create_event(
+                model_name=record._name,
+                record_id=record.id,
+                event_type=operation,
+                payload_data=payload_data,
+                config=config if config else None
+            )
+            
+            if not event:
+                _logger.warning(
+                    f'Failed to create webhook event for rule "{self.name}": '
+                    f'{record._name}:{record.id} ({operation})'
+                )
+                return False
             
             _logger.debug(
                 f'Webhook event created by rule "{self.name}": '
                 f'{record._name}:{record.id} ({operation})'
             )
             
-            # Handle instant send for high priority
-            if self.instant_send and self.priority == 'high' and not self.test_mode:
-                self._send_instant(record, operation, payload_data)
+            # ALWAYS create webhook.event for subscribers (not just instant_send)
+            # This ensures events appear in Webhook Events view
+            if self.subscriber_ids and not self.test_mode:
+                self._create_webhook_events(record, operation, payload_data, config)
+            
+            # Handle instant send - send immediately
+            if self.instant_send and self.subscriber_ids and not self.test_mode:
+                self._send_instant_events(record)
             
             return event
             
@@ -569,16 +584,14 @@ class WebhookRule(models.Model):
         
         return data
 
-    def _send_instant(self, record, operation, payload_data):
-        """Send instant webhook (for high priority events)"""
+    def _create_webhook_events(self, record, operation, payload_data, config=None):
+        """
+        Create webhook.event entries for all subscribers
+        This ensures events appear in Webhook Events view
+        """
         self.ensure_one()
         
-        # Ensure record has an ID
         if not record or not record.id:
-            _logger.warning(
-                f'Instant send skipped: Record has no ID '
-                f'(model: {record._name if record else "Unknown"})'
-            )
             return
         
         if not self.subscriber_ids:
@@ -587,16 +600,47 @@ class WebhookRule(models.Model):
         for subscriber in self.subscriber_ids.filtered('enabled'):
             try:
                 # Create webhook.event for tracking
-                event = self.env['webhook.event'].sudo().create({
+                event_vals = {
                     'model': record._name,
                     'record_id': record.id,
                     'event': operation,
                     'subscriber_id': subscriber.id,
                     'priority': self.priority,
+                    'category': self.category,
                     'payload': payload_data,
                     'status': 'pending',
-                })
+                }
                 
+                # Add config if available
+                if config:
+                    event_vals['config_id'] = config.id
+                
+                self.env['webhook.event'].sudo().create(event_vals)
+                
+                _logger.debug(
+                    f'Webhook event created for subscriber {subscriber.name}: '
+                    f'{record._name}:{record.id} ({operation})'
+                )
+                
+            except Exception as e:
+                _logger.error(f'Failed to create webhook.event: {e}')
+
+    def _send_instant_events(self, record):
+        """Send pending webhook events immediately (for instant_send rules)"""
+        self.ensure_one()
+        
+        if not record or not record.id:
+            return
+        
+        # Find pending events for this record
+        pending_events = self.env['webhook.event'].sudo().search([
+            ('model', '=', record._name),
+            ('record_id', '=', record.id),
+            ('status', '=', 'pending'),
+        ], order='id desc', limit=len(self.subscriber_ids))
+        
+        for event in pending_events:
+            try:
                 # Commit before sending
                 self.env.cr.commit()
                 
@@ -604,7 +648,12 @@ class WebhookRule(models.Model):
                 event._send_to_subscriber()
                 
             except Exception as e:
-                _logger.error(f'Instant send failed: {e}')
+                _logger.error(f'Instant send failed for event {event.id}: {e}')
+
+    def _send_instant(self, record, operation, payload_data):
+        """Legacy method - kept for backwards compatibility"""
+        self._create_webhook_events(record, operation, payload_data)
+        self._send_instant_events(record)
 
     # ═══════════════════════════════════════════════════════════
     # Actions

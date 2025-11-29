@@ -393,19 +393,30 @@ class WebhookConfig(models.Model):
         if not self.subscribers:
             raise ValidationError(_("No subscribers configured for this model"))
 
-        # Create a test event
+        # Try to get a real record from the model for testing
+        try:
+            model_obj = self.env[self.model_name]
+            sample_record = model_obj.search([], limit=1)
+            test_record_id = sample_record.id if sample_record else -1  # Use -1 for test events
+        except Exception:
+            test_record_id = -1  # Use -1 to indicate test event
+        
+        # Create a test event (use -1 to clearly mark as test, not 0 which could be confusing)
         test_event = self.env['webhook.event'].create({
             'model': self.model_name,
-            'record_id': 0,  # Test event
+            'record_id': test_record_id,
             'event': 'create',
             'priority': self.priority,
             'category': self.category,
             'config_id': self.id,
             'subscriber_id': self.subscribers[0].id,
             'payload': {
-                'test': True,
+                '_test_event': True,
                 'message': 'This is a test webhook event',
+                'model': self.model_name,
+                'config_name': self.name,
                 'timestamp': fields.Datetime.now().isoformat(),
+                'sample_record_id': test_record_id,
             }
         })
 

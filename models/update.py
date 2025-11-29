@@ -24,64 +24,77 @@ class UpdateWebhook(models.Model):
         default=fields.Datetime.now,
     )
 
-    _sql_constraints = [
-        ('unique_event_per_record',
-         'unique(model, record_id, event)',
-         'Duplicate webhook event for the same record is not allowed!')
-    ]
+    # Note: Removed unique constraint to allow multiple events for same record
+    # This is intentional to track all changes properly
 
     @api.model_create_multi
     def create(self, vals_list):
-        """ تطبيق القواعد عند إدخال سجل جديد في update.webhook """
+        """
+        تطبيق القواعد عند إدخال سجل جديد في update.webhook
+        
+        Rules:
+        1. Allow all events to be created (no blocking)
+        2. For same record_id:
+           - If create comes after write: Delete all previous writes
+           - If write comes after create: Ignore the write (create already captures all data)
+        """
+        created_records = self.env['update.webhook'].browse()
+        
         for vals in vals_list:
             try:
-                existing_records = self.search([
-                    ('model', '=', vals['model']),
-                    ('record_id', '=', vals['record_id'])
-                ])
-
-                # 💥 تحقّق من وجود نفس السجل مسبقًا
-                same_record = self.search([
-                    ('model', '=', vals['model']),
-                    ('record_id', '=', vals['record_id']),
-                    ('event', '=', vals['event']),
-                ], limit=1)
-
-                if same_record:
-                    _logger.warning(f"⚠️ Skipping duplicate webhook for model={vals['model']} record_id={vals['record_id']} event={vals['event']}")
+                model = vals.get('model')
+                record_id = vals.get('record_id')
+                event = vals.get('event')
+                
+                if not model or not record_id or not event:
+                    _logger.warning(f"⚠️ Skipping invalid webhook vals: {vals}")
                     continue
-
+                
+                # Check for existing records for this model + record_id
+                existing_records = self.search([
+                    ('model', '=', model),
+                    ('record_id', '=', record_id)
+                ])
+                
                 if existing_records:
-                    event_list = existing_records.mapped('event')
-                    latest_create = sorted(
-                        existing_records.filtered(lambda r: r.event == 'create'),
-                        key=lambda r: r.timestamp, reverse=True
-                    )
-                    latest_create = latest_create[0] if latest_create else None
-
-                    if vals['event'] == 'create':
-                        existing_writes = existing_records.filtered(lambda r: r.event == 'write')
-                        if existing_writes:
-                            existing_writes.unlink()
-                            _logger.info(f"🗑️ Removed existing Write events for record_id {vals['record_id']} after Create.")
-
-                    if 'create' in event_list and vals['event'] == 'write':
-                        _logger.info(f"⏳ Ignoring and removing Write for record_id {vals['record_id']} because Create already exists.")
+                    existing_events = existing_records.mapped('event')
+                    
+                    # Rule 1: If new event is 'create' and there are existing 'write' events
+                    # -> Delete all previous writes (create supersedes write)
+                    if event == 'create' and 'write' in existing_events:
+                        writes_to_delete = existing_records.filtered(lambda r: r.event == 'write')
+                        if writes_to_delete:
+                            writes_to_delete.unlink()
+                            _logger.info(f"🗑️ Deleted {len(writes_to_delete)} write events for {model}:{record_id} (create supersedes)")
+                    
+                    # Rule 2: If new event is 'write' and there's already a 'create' event
+                    # -> Skip this write (create already has all data)
+                    elif event == 'write' and 'create' in existing_events:
+                        _logger.info(f"⏭️ Skipping write event for {model}:{record_id} (create already exists)")
                         continue
-
-                # ✅ إنشاء السجل
+                
+                # Create the new record
                 record = super(UpdateWebhook, self).create([vals])
-                _logger.info(f"✅ Webhook event logged: {vals}")
-                return record
-
+                created_records |= record
+                _logger.debug(f"✅ Webhook event created: {model}:{record_id} ({event})")
+                
             except Exception as e:
-                self.env['webhook.errors'].create({
-                    'model': vals.get('model', 'unknown'),
-                    'record_id': vals.get('record_id', 0),
-                    'error_message': str(e),
-                    'timestamp': fields.Datetime.now()
-                })
-                _logger.error(f"❌ Error logging webhook event: {e}")
+                # Log error but don't stop processing other events
+                _logger.error(f"❌ Error creating webhook event: {e}", exc_info=True)
+                
+                # Try to log to webhook.errors if available
+                try:
+                    if 'webhook.errors' in self.env:
+                        self.env['webhook.errors'].create({
+                            'model': vals.get('model', 'unknown'),
+                            'record_id': vals.get('record_id', 0),
+                            'error_message': str(e),
+                            'timestamp': fields.Datetime.now()
+                        })
+                except Exception:
+                    pass  # If even error logging fails, just continue
+        
+        return created_records
 
 
 

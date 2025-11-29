@@ -1,0 +1,369 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        
+        <!-- 
+        ═══════════════════════════════════════════════════════════════════
+        Webhook Rules - Config-Driven Event Tracking
+        ═══════════════════════════════════════════════════════════════════
+        
+        These rules replace the old webhook.mixin inheritance system.
+        Each rule defines:
+        - Which model to track
+        - Which operation (create/write/unlink)
+        - Priority and category
+        - Subscribers to notify
+        
+        Benefits:
+        - No duplicate events
+        - Better performance
+        - Easy to manage from UI
+        - No code changes needed per model
+        ═══════════════════════════════════════════════════════════════════
+        -->
+
+        <!-- =============== HIGH PRIORITY MODELS =============== -->
+
+        <!-- Sale Orders - Create -->
+        <record id="webhook_rule_sale_order_create" model="webhook.rule">
+            <field name="name">Sale Orders - Create</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="operation">create</field>
+            <field name="sequence">10</field>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="True"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new sale orders with instant push notification</field>
+        </record>
+
+        <!-- Sale Orders - Write -->
+        <record id="webhook_rule_sale_order_write" model="webhook.rule">
+            <field name="name">Sale Orders - Update</field>
+            <field name="model_id" ref="sale.model_sale_order"/>
+            <field name="operation">write</field>
+            <field name="sequence">11</field>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="True"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track sale order updates with instant push notification</field>
+        </record>
+
+        <!-- Purchase Orders - Create -->
+        <record id="webhook_rule_purchase_order_create" model="webhook.rule">
+            <field name="name">Purchase Orders - Create</field>
+            <field name="model_id" ref="purchase.model_purchase_order"/>
+            <field name="operation">create</field>
+            <field name="sequence">20</field>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="True"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new purchase orders</field>
+        </record>
+
+        <!-- Purchase Orders - Write -->
+        <record id="webhook_rule_purchase_order_write" model="webhook.rule">
+            <field name="name">Purchase Orders - Update</field>
+            <field name="model_id" ref="purchase.model_purchase_order"/>
+            <field name="operation">write</field>
+            <field name="sequence">21</field>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="True"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track purchase order updates</field>
+        </record>
+
+        <!-- Account Moves (Invoices) - Create -->
+        <record id="webhook_rule_account_move_create" model="webhook.rule">
+            <field name="name">Account Moves - Create</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="operation">create</field>
+            <field name="sequence">30</field>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="True"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new invoices and account moves</field>
+        </record>
+
+        <!-- Account Moves (Invoices) - Write -->
+        <record id="webhook_rule_account_move_write" model="webhook.rule">
+            <field name="name">Account Moves - Update</field>
+            <field name="model_id" ref="account.model_account_move"/>
+            <field name="operation">write</field>
+            <field name="sequence">31</field>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="True"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track invoice and account move updates</field>
+        </record>
+
+        <!-- Account Payments - Create -->
+        <record id="webhook_rule_account_payment_create" model="webhook.rule">
+            <field name="name">Account Payments - Create</field>
+            <field name="model_id" ref="account.model_account_payment"/>
+            <field name="operation">create</field>
+            <field name="sequence">40</field>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="True"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new payments</field>
+        </record>
+
+        <!-- Account Payments - Write -->
+        <record id="webhook_rule_account_payment_write" model="webhook.rule">
+            <field name="name">Account Payments - Update</field>
+            <field name="model_id" ref="account.model_account_payment"/>
+            <field name="operation">write</field>
+            <field name="sequence">41</field>
+            <field name="active" eval="True"/>
+            <field name="priority">high</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="True"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track payment updates</field>
+        </record>
+
+        <!-- =============== MEDIUM PRIORITY MODELS =============== -->
+
+        <!-- Partners (Customers/Suppliers) - Create -->
+        <record id="webhook_rule_res_partner_create" model="webhook.rule">
+            <field name="name">Partners - Create</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="operation">create</field>
+            <field name="sequence">50</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new customers and suppliers</field>
+        </record>
+
+        <!-- Partners (Customers/Suppliers) - Write -->
+        <record id="webhook_rule_res_partner_write" model="webhook.rule">
+            <field name="name">Partners - Update</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="operation">write</field>
+            <field name="sequence">51</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track customer and supplier updates</field>
+        </record>
+
+        <!-- Stock Picking - Create -->
+        <record id="webhook_rule_stock_picking_create" model="webhook.rule">
+            <field name="name">Stock Picking - Create</field>
+            <field name="model_id" ref="stock.model_stock_picking"/>
+            <field name="operation">create</field>
+            <field name="sequence">60</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new stock pickings and deliveries</field>
+        </record>
+
+        <!-- Stock Picking - Write -->
+        <record id="webhook_rule_stock_picking_write" model="webhook.rule">
+            <field name="name">Stock Picking - Update</field>
+            <field name="model_id" ref="stock.model_stock_picking"/>
+            <field name="operation">write</field>
+            <field name="sequence">61</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track stock picking updates</field>
+        </record>
+
+        <!-- Stock Move - Create -->
+        <record id="webhook_rule_stock_move_create" model="webhook.rule">
+            <field name="name">Stock Move - Create</field>
+            <field name="model_id" ref="stock.model_stock_move"/>
+            <field name="operation">create</field>
+            <field name="sequence">70</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new stock movements</field>
+        </record>
+
+        <!-- Stock Move - Write -->
+        <record id="webhook_rule_stock_move_write" model="webhook.rule">
+            <field name="name">Stock Move - Update</field>
+            <field name="model_id" ref="stock.model_stock_move"/>
+            <field name="operation">write</field>
+            <field name="sequence">71</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track stock movement updates</field>
+        </record>
+
+        <!-- HR Expenses - Create -->
+        <record id="webhook_rule_hr_expense_create" model="webhook.rule">
+            <field name="name">HR Expenses - Create</field>
+            <field name="model_id" ref="hr_expense.model_hr_expense"/>
+            <field name="operation">create</field>
+            <field name="sequence">80</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new employee expenses</field>
+        </record>
+
+        <!-- HR Expenses - Write -->
+        <record id="webhook_rule_hr_expense_write" model="webhook.rule">
+            <field name="name">HR Expenses - Update</field>
+            <field name="model_id" ref="hr_expense.model_hr_expense"/>
+            <field name="operation">write</field>
+            <field name="sequence">81</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track expense updates</field>
+        </record>
+
+        <!-- HR Employees - Create -->
+        <record id="webhook_rule_hr_employee_create" model="webhook.rule">
+            <field name="name">HR Employees - Create</field>
+            <field name="model_id" ref="hr.model_hr_employee"/>
+            <field name="operation">create</field>
+            <field name="sequence">90</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new employees</field>
+        </record>
+
+        <!-- HR Employees - Write -->
+        <record id="webhook_rule_hr_employee_write" model="webhook.rule">
+            <field name="name">HR Employees - Update</field>
+            <field name="model_id" ref="hr.model_hr_employee"/>
+            <field name="operation">write</field>
+            <field name="sequence">91</field>
+            <field name="active" eval="True"/>
+            <field name="priority">medium</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track employee updates</field>
+        </record>
+
+        <!-- =============== LOW PRIORITY MODELS =============== -->
+
+        <!-- Product Templates - Create -->
+        <record id="webhook_rule_product_template_create" model="webhook.rule">
+            <field name="name">Products - Create</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="operation">create</field>
+            <field name="sequence">100</field>
+            <field name="active" eval="True"/>
+            <field name="priority">low</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new products</field>
+        </record>
+
+        <!-- Product Templates - Write -->
+        <record id="webhook_rule_product_template_write" model="webhook.rule">
+            <field name="name">Products - Update</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="operation">write</field>
+            <field name="sequence">101</field>
+            <field name="active" eval="True"/>
+            <field name="priority">low</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track product updates</field>
+        </record>
+
+        <!-- Product Categories - Create -->
+        <record id="webhook_rule_product_category_create" model="webhook.rule">
+            <field name="name">Product Categories - Create</field>
+            <field name="model_id" ref="product.model_product_category"/>
+            <field name="operation">create</field>
+            <field name="sequence">110</field>
+            <field name="active" eval="True"/>
+            <field name="priority">low</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new product categories</field>
+        </record>
+
+        <!-- Product Categories - Write -->
+        <record id="webhook_rule_product_category_write" model="webhook.rule">
+            <field name="name">Product Categories - Update</field>
+            <field name="model_id" ref="product.model_product_category"/>
+            <field name="operation">write</field>
+            <field name="sequence">111</field>
+            <field name="active" eval="True"/>
+            <field name="priority">low</field>
+            <field name="category">business</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track product category updates</field>
+        </record>
+
+        <!-- Account Journals - Create -->
+        <record id="webhook_rule_account_journal_create" model="webhook.rule">
+            <field name="name">Account Journals - Create</field>
+            <field name="model_id" ref="account.model_account_journal"/>
+            <field name="operation">create</field>
+            <field name="sequence">120</field>
+            <field name="active" eval="True"/>
+            <field name="priority">low</field>
+            <field name="category">system</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track new account journals</field>
+        </record>
+
+        <!-- Account Journals - Write -->
+        <record id="webhook_rule_account_journal_write" model="webhook.rule">
+            <field name="name">Account Journals - Update</field>
+            <field name="model_id" ref="account.model_account_journal"/>
+            <field name="operation">write</field>
+            <field name="sequence">121</field>
+            <field name="active" eval="True"/>
+            <field name="priority">low</field>
+            <field name="category">system</field>
+            <field name="instant_send" eval="False"/>
+            <field name="subscriber_ids" eval="[(4, ref('auto_webhook.webhook_subscriber_bridgecore'))]"/>
+            <field name="description">Track account journal updates</field>
+        </record>
+
+    </data>
+</odoo>
+

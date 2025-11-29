@@ -23,7 +23,7 @@ Performance:
 - Lazy loading of rules only when needed
 """
 
-from odoo import models, api
+from odoo import models, api, fields
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -50,18 +50,14 @@ class BaseWebhookHook(models.AbstractModel):
         # Execute original create
         records = super().create(vals_list)
         
-        # Trigger webhook AFTER transaction using @after_commit
-        # This ensures records are fully saved with valid IDs
+        # Trigger webhook immediately (not after_commit)
         if records and not self.env.context.get('webhook_disabled'):
-            # Use after_commit to ensure IDs are assigned
-            @self.env.cr.postcommit.add
-            def trigger_webhooks():
-                try:
-                    # Ensure records still exist and have IDs
-                    if records.exists():
-                        self._webhook_trigger_create(records)
-                except Exception as e:
-                    _logger.error(f'Webhook trigger failed for create: {e}', exc_info=True)
+            try:
+                for record in records:
+                    if record.exists() and record.id:
+                        self._webhook_trigger_create(record)
+            except Exception as e:
+                _logger.error(f'Webhook trigger failed for create: {e}', exc_info=True)
         
         return records
 
@@ -69,14 +65,19 @@ class BaseWebhookHook(models.AbstractModel):
         """
         Override write to trigger webhooks based on rules
         """
+        # Skip write events if we're in create context
+        if self.env.context.get('skip_webhook_write'):
+            return super().write(vals)
+        
         # Execute original write
         result = super().write(vals)
         
         # Trigger webhook (fail-safe)
-        try:
-            self._webhook_trigger_write(vals)
-        except Exception as e:
-            _logger.error(f'Webhook trigger failed for write: {e}')
+        if not self.env.context.get('webhook_disabled'):
+            try:
+                self._webhook_trigger_write(vals)
+            except Exception as e:
+                _logger.error(f'Webhook trigger failed for write: {e}')
         
         return result
 
@@ -106,36 +107,36 @@ class BaseWebhookHook(models.AbstractModel):
     # Webhook Trigger Methods
     # ═══════════════════════════════════════════════════════════
 
-    def _webhook_trigger_create(self, records):
+    def _webhook_trigger_create(self, record):
         """
-        Trigger webhooks for created records
+        Trigger webhooks for created record
+        
+        Supports both webhook.rule and webhook.config based tracking.
         
         Args:
-            records: Created records
+            record: Created record (single record)
         """
         # Early exit: Check if webhooks are disabled via context
         if self.env.context.get('webhook_disabled'):
             return
         
         # Early exit: Check if this model is tracked
-        if not self._webhook_is_model_tracked():
+        if not record._webhook_is_model_tracked():
             return
         
-        # Get rules for this model and operation
-        rules = self._webhook_get_rules('create')
-        if not rules:
+        # Ensure record has valid ID
+        if not record.id or isinstance(record.id, models.NewId):
+            _logger.warning(
+                f'Skipping webhook for {record._name}: '
+                f'Record has no valid ID (id={record.id})'
+            )
             return
         
-        # Process each record
-        for record in records:
-            # Ensure record has valid ID
-            if not record.id or isinstance(record.id, models.NewId):
-                _logger.warning(
-                    f'Skipping webhook for {record._name}: '
-                    f'Record has no valid ID (id={record.id})'
-                )
-                continue
-                
+        # Method 1: Try webhook.rule based triggering
+        rules = record._webhook_get_rules('create')
+        rules_triggered = False
+        
+        if rules:
             for rule in rules:
                 try:
                     # Check domain filter
@@ -144,15 +145,22 @@ class BaseWebhookHook(models.AbstractModel):
                     
                     # Trigger event
                     rule.trigger_event(record, 'create')
+                    rules_triggered = True
                     
                 except Exception as e:
                     _logger.error(
                         f'Webhook trigger failed for rule "{rule.name}": {e}'
                     )
+        
+        # Method 2: If no rules, try webhook.config based triggering
+        if not rules_triggered:
+            self._webhook_trigger_via_config(record, 'create')
 
     def _webhook_trigger_write(self, vals):
         """
         Trigger webhooks for updated records
+        
+        Supports both webhook.rule and webhook.config based tracking.
         
         Args:
             vals: Updated values
@@ -165,34 +173,42 @@ class BaseWebhookHook(models.AbstractModel):
         if not self._webhook_is_model_tracked():
             return
         
-        # Get rules for this model and operation
+        # Method 1: Try webhook.rule based triggering
         rules = self._webhook_get_rules('write')
-        if not rules:
-            return
+        rules_triggered = False
         
-        # Process each record
-        for record in self:
-            for rule in rules:
-                try:
-                    # Check tracked fields filter
-                    if not rule._match_tracked_fields(vals):
-                        continue
-                    
-                    # Check domain filter
-                    if not rule._match_domain(record):
-                        continue
-                    
-                    # Trigger event
-                    rule.trigger_event(record, 'write', vals)
-                    
-                except Exception as e:
-                    _logger.error(
-                        f'Webhook trigger failed for rule "{rule.name}": {e}'
-                    )
+        if rules:
+            # Process each record
+            for record in self:
+                for rule in rules:
+                    try:
+                        # Check tracked fields filter
+                        if not rule._match_tracked_fields(vals):
+                            continue
+                        
+                        # Check domain filter
+                        if not rule._match_domain(record):
+                            continue
+                        
+                        # Trigger event
+                        rule.trigger_event(record, 'write', vals)
+                        rules_triggered = True
+                        
+                    except Exception as e:
+                        _logger.error(
+                            f'Webhook trigger failed for rule "{rule.name}": {e}'
+                        )
+        
+        # Method 2: If no rules, try webhook.config based triggering
+        if not rules_triggered:
+            for record in self:
+                self._webhook_trigger_via_config(record, 'write', vals)
 
     def _webhook_capture_for_unlink(self):
         """
         Capture record data before deletion
+        
+        Supports both webhook.rule and webhook.config based tracking.
         
         Returns:
             list: List of dicts with record id and data
@@ -207,21 +223,42 @@ class BaseWebhookHook(models.AbstractModel):
         
         # Get rules for this model and operation
         rules = self._webhook_get_rules('unlink')
-        if not rules:
+        
+        # Also check for webhook.config
+        config = None
+        if 'webhook.config' in self.env:
+            config = self.env['webhook.config'].sudo().search([
+                ('model_name', '=', self._name),
+                ('enabled', '=', True),
+                ('active', '=', True)
+            ], limit=1)
+            
+            # If config exists, check if unlink is enabled
+            if config and 'unlink' not in config.events.split(','):
+                config = None
+        
+        # Exit if no rules and no config
+        if not rules and not config:
             return []
         
         # Capture data for each record
         records_data = []
         for record in self:
             try:
-                # Use first rule's payload preparation
-                rule = rules[0]
-                payload = rule._prepare_payload(record)
+                # Prepare payload
+                if rules:
+                    # Use first rule's payload preparation
+                    payload = rules[0]._prepare_payload(record)
+                else:
+                    # Use config-based payload preparation
+                    payload = self._webhook_prepare_payload(record, 'unlink', config=config)
+                
                 records_data.append({
                     'id': record.id,
                     'model': record._name,
                     'payload': payload,
                     'rules': rules,
+                    'config': config,
                 })
             except Exception as e:
                 _logger.error(f'Failed to capture unlink data: {e}')
@@ -232,6 +269,8 @@ class BaseWebhookHook(models.AbstractModel):
         """
         Trigger webhooks for deleted records
         
+        Supports both webhook.rule and webhook.config based tracking.
+        
         Args:
             records_data: List of captured record data
         """
@@ -239,21 +278,30 @@ class BaseWebhookHook(models.AbstractModel):
             return
         
         for data in records_data:
-            for rule in data.get('rules', []):
+            rules = data.get('rules', [])
+            rules_triggered = False
+            
+            # Method 1: Try webhook.rule based triggering
+            for rule in rules:
                 try:
-                    # Create event directly (record is already deleted)
-                    self.env['update.webhook'].sudo().create({
-                        'model': data['model'],
-                        'record_id': data['id'],
-                        'event': 'unlink',
-                        'payload': data['payload'],
-                        'priority': rule.priority,
-                        'category': rule.category,
-                        'user_id': self.env.user.id,
-                    })
+                    # Get webhook config for additional metadata
+                    config = self.env['webhook.config'].sudo().search([
+                        ('model_name', '=', data['model'])
+                    ], limit=1)
+                    
+                    # Create event using update.webhook.create_event
+                    self.env['update.webhook'].sudo().create_event(
+                        model_name=data['model'],
+                        record_id=data['id'],
+                        event_type='unlink',
+                        payload_data=data['payload'],
+                        config=config if config else None
+                    )
                     
                     # Update rule last trigger
-                    rule.sudo().write({'last_trigger': self.env.cr.now()})
+                    rule.sudo().write({'last_trigger': fields.Datetime.now()})
+                    
+                    rules_triggered = True
                     
                     _logger.debug(
                         f'Unlink webhook event created: '
@@ -264,6 +312,10 @@ class BaseWebhookHook(models.AbstractModel):
                     _logger.error(
                         f'Webhook trigger failed for unlink: {e}'
                     )
+            
+            # Method 2: If no rules, try webhook.config based triggering
+            if not rules_triggered:
+                self._webhook_trigger_unlink_via_config(data)
 
     # ═══════════════════════════════════════════════════════════
     # Helper Methods
@@ -271,9 +323,10 @@ class BaseWebhookHook(models.AbstractModel):
 
     def _webhook_is_model_tracked(self):
         """
-        Fast check if current model has any webhook rules
+        Fast check if current model has any webhook rules OR webhook config
         
         Uses cached set of tracked models for O(1) lookup.
+        Also checks webhook.config for manually added models.
         
         Returns:
             bool: True if model is tracked
@@ -283,23 +336,33 @@ class BaseWebhookHook(models.AbstractModel):
             if not hasattr(self, '_name') or not self._name:
                 return False
             
-            # Skip internal/technical models
-            if self._name.startswith('ir.') or self._name.startswith('base.'):
+            # Skip internal/technical models EXCEPT res.partner
+            if self._name.startswith('ir.'):
                 return False
             
             if self._name in ['webhook.rule', 'webhook.event', 'update.webhook',
                               'webhook.config', 'webhook.subscriber', 'webhook.audit',
-                              'webhook.retry', 'webhook.template', 'user.sync.state']:
+                              'webhook.retry', 'webhook.template', 'user.sync.state',
+                              'webhook.errors', 'webhook.cleanup.cron']:
                 return False
             
-            # Check if webhook.rule model exists
-            if 'webhook.rule' not in self.env:
-                return False
+            # Check 1: webhook.rule (rules-based tracking)
+            if 'webhook.rule' in self.env:
+                tracked_models = self.env['webhook.rule']._get_tracked_models()
+                if self._name in tracked_models:
+                    return True
             
-            # Get tracked models from cache
-            tracked_models = self.env['webhook.rule']._get_tracked_models()
+            # Check 2: webhook.config (config-based tracking for manually added models)
+            if 'webhook.config' in self.env:
+                config = self.env['webhook.config'].sudo().search([
+                    ('model_name', '=', self._name),
+                    ('enabled', '=', True),
+                    ('active', '=', True)
+                ], limit=1)
+                if config:
+                    return True
             
-            return self._name in tracked_models
+            return False
             
         except Exception as e:
             _logger.debug(f'Error checking if model is tracked: {e}')
@@ -321,3 +384,270 @@ class BaseWebhookHook(models.AbstractModel):
             _logger.error(f'Failed to get webhook rules: {e}')
             return self.env['webhook.rule'].browse()
 
+    def _webhook_trigger_via_config(self, record, operation, vals=None):
+        """
+        Trigger webhook via webhook.config (for manually added models)
+        
+        This method is called when no webhook.rule exists but webhook.config does.
+        It creates events in both update.webhook and webhook.event.
+        
+        Args:
+            record: The record that triggered the event
+            operation: Operation type ('create', 'write', 'unlink')
+            vals: Changed values (for write operation)
+        """
+        try:
+            # Get webhook config
+            if 'webhook.config' not in self.env:
+                return
+            
+            config = self.env['webhook.config'].sudo().search([
+                ('model_name', '=', record._name),
+                ('enabled', '=', True),
+                ('active', '=', True)
+            ], limit=1)
+            
+            if not config:
+                return
+            
+            # Check if this event type is enabled
+            if operation not in config.events.split(','):
+                return
+            
+            # Check filter domain
+            if config.filter_domain:
+                try:
+                    from odoo.tools.safe_eval import safe_eval
+                    domain = safe_eval(config.filter_domain)
+                    if domain:
+                        matching = record.sudo().search([
+                            ('id', '=', record.id)
+                        ] + domain, limit=1)
+                        if not matching:
+                            return
+                except Exception as e:
+                    _logger.warning(f'Domain filter error: {e}')
+            
+            # Check filtered fields for write events
+            if operation == 'write' and config.filtered_fields and vals:
+                tracked_field_names = set(config.filtered_fields.mapped('name'))
+                changed_fields = set(vals.keys())
+                if not tracked_field_names.intersection(changed_fields):
+                    return
+            
+            # Prepare payload data
+            payload_data = self._webhook_prepare_payload(record, operation, vals, config)
+            
+            # Step 1: Create event in update.webhook (for pull-based access)
+            try:
+                self.env['update.webhook'].sudo().create_event(
+                    model_name=record._name,
+                    record_id=record.id,
+                    event_type=operation,
+                    payload_data=payload_data,
+                    config=config
+                )
+                _logger.debug(f'Created update.webhook event: {record._name}:{record.id} ({operation})')
+            except Exception as e:
+                _logger.error(f'Failed to create update.webhook event: {e}')
+            
+            # Step 2: Create webhook.event for subscribers (for push-based delivery)
+            subscribers = config.subscribers.filtered(lambda s: s.enabled and s.active)
+            if subscribers and config.instant_send:
+                for subscriber in subscribers:
+                    try:
+                        event = self.env['webhook.event'].sudo().create({
+                            'model': record._name,
+                            'record_id': record.id,
+                            'event': operation,
+                            'config_id': config.id,
+                            'subscriber_id': subscriber.id,
+                            'priority': config.priority,
+                            'category': config.category,
+                            'payload': payload_data,
+                            'status': 'pending',
+                            'changed_fields': list(vals.keys()) if vals else [],
+                        })
+                        
+                        _logger.info(f'Created webhook.event: {event.id} for {record._name}:{record.id}')
+                        
+                        # Instant send for high priority
+                        if config.instant_send and config.priority == 'high':
+                            try:
+                                self.env.cr.commit()
+                                event._send_to_subscriber()
+                            except Exception as e:
+                                _logger.error(f'Instant send failed: {e}')
+                                
+                    except Exception as e:
+                        _logger.error(f'Failed to create webhook.event for {subscriber.name}: {e}')
+                        
+        except Exception as e:
+            _logger.error(f'Webhook trigger via config failed: {e}', exc_info=True)
+
+    def _webhook_prepare_payload(self, record, operation, vals=None, config=None):
+        """
+        Prepare webhook payload data
+        
+        Args:
+            record: The record
+            operation: Operation type
+            vals: Changed values (for write)
+            config: webhook.config record
+            
+        Returns:
+            dict: Payload data
+        """
+        try:
+            # Get fields to include
+            if config and config.filtered_fields:
+                fields_to_include = config.filtered_fields.mapped('name')
+            else:
+                # All readable fields (excluding internal ones)
+                fields_to_include = [
+                    f for f in record._fields.keys()
+                    if not f.startswith('_') and f not in [
+                        'create_uid', 'write_uid', '__last_update',
+                        'message_ids', 'message_follower_ids', 'activity_ids'
+                    ]
+                ]
+            
+            # Build data
+            data = {}
+            for field_name in fields_to_include:
+                try:
+                    field = record._fields.get(field_name)
+                    if not field:
+                        continue
+                    
+                    # Skip computed non-stored fields
+                    if field.compute and not field.store:
+                        continue
+                    
+                    # Skip binary fields
+                    if field.type == 'binary':
+                        data[field_name] = bool(getattr(record, field_name, None))
+                        continue
+                    
+                    value = getattr(record, field_name, None)
+                    
+                    # Handle field types
+                    if field.type == 'many2one':
+                        data[field_name] = {
+                            'id': value.id if value else False,
+                            'name': value.display_name if value else ''
+                        }
+                    elif field.type in ['one2many', 'many2many']:
+                        data[field_name] = [
+                            {'id': r.id, 'name': r.display_name}
+                            for r in (value[:50] if value else [])
+                        ]
+                    elif field.type == 'datetime':
+                        data[field_name] = value.isoformat() if value else False
+                    elif field.type == 'date':
+                        data[field_name] = value.isoformat() if value else False
+                    else:
+                        data[field_name] = value
+                        
+                except Exception as e:
+                    _logger.warning(f'Failed to get field {field_name}: {e}')
+                    data[field_name] = None
+            
+            # Add metadata
+            data['_metadata'] = {
+                'model': record._name,
+                'id': record.id,
+                'display_name': record.display_name if hasattr(record, 'display_name') else str(record.id),
+                'operation': operation,
+                'timestamp': fields.Datetime.now().isoformat(),
+            }
+            
+            # Add changed fields for write
+            if vals:
+                data['_changed_fields'] = list(vals.keys())
+            
+            return data
+            
+        except Exception as e:
+            _logger.error(f'Failed to prepare payload: {e}')
+            return {
+                '_metadata': {
+                    'model': record._name,
+                    'id': record.id,
+                    'operation': operation,
+                    'error': str(e)
+                }
+            }
+
+    def _webhook_trigger_unlink_via_config(self, data):
+        """
+        Trigger unlink webhook via webhook.config (for manually added models)
+        
+        Args:
+            data: Dict with 'id', 'model', 'payload', 'config' keys
+        """
+        try:
+            config = data.get('config')
+            if not config:
+                # Try to get config
+                if 'webhook.config' not in self.env:
+                    return
+                
+                config = self.env['webhook.config'].sudo().search([
+                    ('model_name', '=', data['model']),
+                    ('enabled', '=', True),
+                    ('active', '=', True)
+                ], limit=1)
+            
+            if not config:
+                return
+            
+            # Check if unlink is enabled
+            if 'unlink' not in config.events.split(','):
+                return
+            
+            # Step 1: Create event in update.webhook
+            try:
+                self.env['update.webhook'].sudo().create_event(
+                    model_name=data['model'],
+                    record_id=data['id'],
+                    event_type='unlink',
+                    payload_data=data['payload'],
+                    config=config
+                )
+                _logger.debug(f'Created update.webhook unlink event: {data["model"]}:{data["id"]}')
+            except Exception as e:
+                _logger.error(f'Failed to create update.webhook unlink event: {e}')
+            
+            # Step 2: Create webhook.event for subscribers
+            subscribers = config.subscribers.filtered(lambda s: s.enabled and s.active)
+            if subscribers and config.instant_send:
+                for subscriber in subscribers:
+                    try:
+                        event = self.env['webhook.event'].sudo().create({
+                            'model': data['model'],
+                            'record_id': data['id'],
+                            'event': 'unlink',
+                            'config_id': config.id,
+                            'subscriber_id': subscriber.id,
+                            'priority': config.priority,
+                            'category': config.category,
+                            'payload': data['payload'],
+                            'status': 'pending',
+                        })
+                        
+                        _logger.info(f'Created webhook.event for unlink: {event.id}')
+                        
+                        # Instant send for high priority
+                        if config.priority == 'high':
+                            try:
+                                self.env.cr.commit()
+                                event._send_to_subscriber()
+                            except Exception as e:
+                                _logger.error(f'Instant send failed: {e}')
+                                
+                    except Exception as e:
+                        _logger.error(f'Failed to create unlink webhook.event: {e}')
+                        
+        except Exception as e:
+            _logger.error(f'Unlink webhook via config failed: {e}', exc_info=True)

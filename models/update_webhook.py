@@ -164,10 +164,11 @@ class UpdateWebhook(models.Model):
     )
 
     # === SQL Constraints ===
+    # Note: record_id can be -1 for test events, 0 is not allowed
     _sql_constraints = [
         ('check_record_id',
-         'CHECK(record_id > 0)',
-         'Record ID must be positive'),
+         'CHECK(record_id != 0)',
+         'Record ID cannot be 0 (use -1 for test events)'),
     ]
 
     @api.depends('model', 'event', 'record_id', 'timestamp')

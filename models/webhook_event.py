@@ -608,6 +608,17 @@ class WebhookEvent(models.Model):
                 import json
                 payload = json.loads(payload)
             
+            # التحقق من record_id (0 غير مسموح، -1 للاختبارات مسموح)
+            if self.record_id == 0:
+                _logger.error(f"Event {self.id} has invalid record_id=0, marking as failed")
+                self.write({
+                    'status': 'failed',
+                    'error_message': 'Invalid record_id=0 (use -1 for test events)',
+                })
+                return
+            
+            # Note: record_id = -1 indicates a test event - this is allowed
+            
             # إضافة metadata
             payload['_webhook_metadata'] = {
                 'event_id': self.id,
