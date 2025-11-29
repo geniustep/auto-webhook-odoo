@@ -626,7 +626,12 @@ class WebhookRule(models.Model):
                 _logger.error(f'Failed to create webhook.event: {e}')
 
     def _send_instant_events(self, record):
-        """Send pending webhook events immediately (for instant_send rules)"""
+        """
+        Send pending webhook events immediately (for instant_send rules)
+        
+        Note: We use after_commit to avoid transaction issues.
+        The webhook will be sent after the current transaction commits successfully.
+        """
         self.ensure_one()
         
         if not record or not record.id:
@@ -639,16 +644,23 @@ class WebhookRule(models.Model):
             ('status', '=', 'pending'),
         ], order='id desc', limit=len(self.subscriber_ids))
         
-        for event in pending_events:
-            try:
-                # Commit before sending
-                self.env.cr.commit()
-                
-                # Send immediately
-                event._send_to_subscriber()
-                
-            except Exception as e:
-                _logger.error(f'Instant send failed for event {event.id}: {e}')
+        if not pending_events:
+            return
+        
+        # Use after_commit to send webhooks after transaction completes
+        # This avoids 502 errors caused by committing mid-transaction
+        def send_webhooks():
+            for event in pending_events:
+                try:
+                    # Re-fetch event to ensure it still exists and is pending
+                    event_fresh = self.env['webhook.event'].sudo().browse(event.id)
+                    if event_fresh.exists() and event_fresh.status == 'pending':
+                        event_fresh._send_to_subscriber()
+                except Exception as e:
+                    _logger.error(f'Instant send failed for event {event.id}: {e}')
+        
+        # Schedule to run after commit
+        self.env.cr.postcommit.add(send_webhooks)
 
     def _send_instant(self, record, operation, payload_data):
         """Legacy method - kept for backwards compatibility"""

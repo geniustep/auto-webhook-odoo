@@ -61,14 +61,21 @@ class BaseWebhookHook(models.AbstractModel):
         # Execute original create
         records = super().create(vals_list)
         
-        # Trigger webhook immediately (not after_commit) with debouncing
+        # Trigger webhook with context flag to prevent duplicate write events
         if records and not self.env.context.get('webhook_disabled'):
             try:
+                # Mark these records as "just created" to skip immediate writes
+                created_ids = set(records.ids)
+                
                 for record in records:
                     if record.exists() and record.id:
                         # Check debounce before triggering
                         if self._webhook_should_trigger(record._name, record.id, 'create'):
-                            self._webhook_trigger_create(record)
+                            # Use context to prevent write webhook for this record
+                            record_with_ctx = record.with_context(
+                                _webhook_just_created=created_ids
+                            )
+                            self._webhook_trigger_create(record_with_ctx)
             except Exception as e:
                 _logger.error(f'Webhook trigger failed for create: {e}', exc_info=True)
         
@@ -89,9 +96,15 @@ class BaseWebhookHook(models.AbstractModel):
         # Trigger webhook (fail-safe) with debouncing
         if not self.env.context.get('webhook_disabled'):
             try:
-                # Filter records that pass debounce check
+                # Get IDs of records that were just created (skip them)
+                just_created = self.env.context.get('_webhook_just_created', set())
+                
+                # Filter records:
+                # 1. Not just created (to avoid create+write duplicate)
+                # 2. Pass debounce check
                 records_to_trigger = self.filtered(
-                    lambda r: self._webhook_should_trigger(r._name, r.id, 'write')
+                    lambda r: r.id not in just_created and 
+                              self._webhook_should_trigger(r._name, r.id, 'write')
                 )
                 
                 if records_to_trigger:
@@ -545,13 +558,17 @@ class BaseWebhookHook(models.AbstractModel):
                         
                         _logger.info(f'Created webhook.event: {event.id} for {record._name}:{record.id}')
                         
-                        # Instant send for high priority
+                        # Instant send for high priority (after transaction commits)
                         if config.instant_send and config.priority == 'high':
-                            try:
-                                self.env.cr.commit()
-                                event._send_to_subscriber()
-                            except Exception as e:
-                                _logger.error(f'Instant send failed: {e}')
+                            event_id = event.id
+                            def send_after_commit(ev_id=event_id):
+                                try:
+                                    ev = self.env['webhook.event'].sudo().browse(ev_id)
+                                    if ev.exists() and ev.status == 'pending':
+                                        ev._send_to_subscriber()
+                                except Exception as e:
+                                    _logger.error(f'Instant send failed: {e}')
+                            self.env.cr.postcommit.add(send_after_commit)
                                 
                     except Exception as e:
                         _logger.error(f'Failed to create webhook.event for {subscriber.name}: {e}')
@@ -712,13 +729,17 @@ class BaseWebhookHook(models.AbstractModel):
                         
                         _logger.info(f'Created webhook.event for unlink: {event.id}')
                         
-                        # Instant send for high priority
+                        # Instant send for high priority (after transaction commits)
                         if config.priority == 'high':
-                            try:
-                                self.env.cr.commit()
-                                event._send_to_subscriber()
-                            except Exception as e:
-                                _logger.error(f'Instant send failed: {e}')
+                            event_id = event.id
+                            def send_unlink_after_commit(ev_id=event_id):
+                                try:
+                                    ev = self.env['webhook.event'].sudo().browse(ev_id)
+                                    if ev.exists() and ev.status == 'pending':
+                                        ev._send_to_subscriber()
+                                except Exception as e:
+                                    _logger.error(f'Instant send failed: {e}')
+                            self.env.cr.postcommit.add(send_unlink_after_commit)
                                 
                     except Exception as e:
                         _logger.error(f'Failed to create unlink webhook.event: {e}')
