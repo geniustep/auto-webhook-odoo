@@ -25,6 +25,8 @@ Performance:
 
 from odoo import models, api, fields
 import logging
+import threading
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -37,6 +39,15 @@ class BaseWebhookHook(models.AbstractModel):
     if there's an active webhook.rule for the model.
     """
     _inherit = 'base'
+    
+    # ═══════════════════════════════════════════════════════════
+    # Debouncing Cache (Thread-safe)
+    # Prevents multiple webhook triggers for same record within short time
+    # ═══════════════════════════════════════════════════════════
+    
+    _webhook_debounce_cache = {}  # {model:record_id: timestamp}
+    _webhook_debounce_lock = threading.Lock()
+    _DEBOUNCE_SECONDS = 2  # Don't trigger again within 2 seconds
 
     # ═══════════════════════════════════════════════════════════
     # CRUD Overrides
@@ -50,12 +61,14 @@ class BaseWebhookHook(models.AbstractModel):
         # Execute original create
         records = super().create(vals_list)
         
-        # Trigger webhook immediately (not after_commit)
+        # Trigger webhook immediately (not after_commit) with debouncing
         if records and not self.env.context.get('webhook_disabled'):
             try:
                 for record in records:
                     if record.exists() and record.id:
-                        self._webhook_trigger_create(record)
+                        # Check debounce before triggering
+                        if self._webhook_should_trigger(record._name, record.id, 'create'):
+                            self._webhook_trigger_create(record)
             except Exception as e:
                 _logger.error(f'Webhook trigger failed for create: {e}', exc_info=True)
         
@@ -64,6 +77,7 @@ class BaseWebhookHook(models.AbstractModel):
     def write(self, vals):
         """
         Override write to trigger webhooks based on rules
+        With debouncing to prevent multiple events for same record
         """
         # Skip write events if we're in create context
         if self.env.context.get('skip_webhook_write'):
@@ -72,10 +86,16 @@ class BaseWebhookHook(models.AbstractModel):
         # Execute original write
         result = super().write(vals)
         
-        # Trigger webhook (fail-safe)
+        # Trigger webhook (fail-safe) with debouncing
         if not self.env.context.get('webhook_disabled'):
             try:
-                self._webhook_trigger_write(vals)
+                # Filter records that pass debounce check
+                records_to_trigger = self.filtered(
+                    lambda r: self._webhook_should_trigger(r._name, r.id, 'write')
+                )
+                
+                if records_to_trigger:
+                    records_to_trigger._webhook_trigger_write(vals)
             except Exception as e:
                 _logger.error(f'Webhook trigger failed for write: {e}')
         
@@ -320,6 +340,49 @@ class BaseWebhookHook(models.AbstractModel):
     # ═══════════════════════════════════════════════════════════
     # Helper Methods
     # ═══════════════════════════════════════════════════════════
+
+    @classmethod
+    def _webhook_should_trigger(cls, model_name, record_id, operation):
+        """
+        Check if webhook should trigger (debouncing)
+        
+        Prevents multiple triggers for same record within DEBOUNCE_SECONDS.
+        This is useful when Odoo triggers multiple writes for same record
+        (e.g., computed fields, related fields).
+        
+        Args:
+            model_name: Technical model name
+            record_id: Record ID
+            operation: Operation type (create/write/unlink)
+            
+        Returns:
+            bool: True if should trigger, False if debounced
+        """
+        cache_key = f"{model_name}:{record_id}:{operation}"
+        current_time = time.time()
+        
+        with cls._webhook_debounce_lock:
+            # Clean old entries (older than 60 seconds)
+            keys_to_delete = [
+                k for k, v in cls._webhook_debounce_cache.items()
+                if current_time - v > 60
+            ]
+            for k in keys_to_delete:
+                del cls._webhook_debounce_cache[k]
+            
+            # Check if recently triggered
+            last_trigger = cls._webhook_debounce_cache.get(cache_key, 0)
+            
+            if current_time - last_trigger < cls._DEBOUNCE_SECONDS:
+                _logger.debug(
+                    f'Webhook debounced for {cache_key} '
+                    f'(triggered {current_time - last_trigger:.2f}s ago)'
+                )
+                return False
+            
+            # Update cache and allow trigger
+            cls._webhook_debounce_cache[cache_key] = current_time
+            return True
 
     def _webhook_is_model_tracked(self):
         """
