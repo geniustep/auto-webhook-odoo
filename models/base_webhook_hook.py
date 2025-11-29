@@ -47,7 +47,7 @@ class BaseWebhookHook(models.AbstractModel):
     
     _webhook_debounce_cache = {}  # {model:record_id: timestamp}
     _webhook_debounce_lock = threading.Lock()
-    _DEBOUNCE_SECONDS = 2  # Don't trigger again within 2 seconds
+    _DEBOUNCE_SECONDS = 3  # Don't trigger again within 3 seconds
 
     # ═══════════════════════════════════════════════════════════
     # CRUD Overrides
@@ -350,6 +350,11 @@ class BaseWebhookHook(models.AbstractModel):
         This is useful when Odoo triggers multiple writes for same record
         (e.g., computed fields, related fields).
         
+        Special rules:
+        - 'create' and 'write' share the same debounce window
+          (because Odoo often does create() then write() immediately)
+        - 'unlink' has its own debounce window
+        
         Args:
             model_name: Technical model name
             record_id: Record ID
@@ -358,7 +363,13 @@ class BaseWebhookHook(models.AbstractModel):
         Returns:
             bool: True if should trigger, False if debounced
         """
-        cache_key = f"{model_name}:{record_id}:{operation}"
+        # Create and Write share same debounce key
+        # This prevents write() right after create() from triggering
+        if operation in ('create', 'write'):
+            cache_key = f"{model_name}:{record_id}:create_write"
+        else:
+            cache_key = f"{model_name}:{record_id}:{operation}"
+        
         current_time = time.time()
         
         with cls._webhook_debounce_lock:
@@ -370,7 +381,7 @@ class BaseWebhookHook(models.AbstractModel):
             for k in keys_to_delete:
                 del cls._webhook_debounce_cache[k]
             
-            # Check if recently triggered
+            # Check if recently triggered (any operation on same record)
             last_trigger = cls._webhook_debounce_cache.get(cache_key, 0)
             
             if current_time - last_trigger < cls._DEBOUNCE_SECONDS:
